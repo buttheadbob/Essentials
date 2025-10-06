@@ -1,10 +1,9 @@
 ﻿using System;
 
-namespace Essentials
+namespace Essentials;
+
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+public sealed class ConditionModule : Attribute
 {
-    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
-    public sealed class ConditionModule : Attribute
-    {
         
-    }
 }

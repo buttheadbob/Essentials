@@ -6,296 +6,294 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
-using Sandbox.Game.World;
 using Torch.API.Managers;
 using Torch.Commands;
 using Torch.Commands.Permissions;
 using Torch.Mod;
 using Torch.Mod.Messages;
 using VRage.Game.ModAPI;
+// ReSharper disable IdentifierTypo
 
-namespace Essentials.Commands
+namespace Essentials.Commands;
+
+public class VotingModule : CommandModule
 {
-    public class VotingModule : CommandModule
+    public enum Status
     {
-        public enum Status
-        {
-            voteStandby,
-            voteInProgress,
-            voteCancel,
+        voteStandby,
+        voteInProgress,
+        voteCancel,
 
-            // Last vote
-            voteFail,
-            voteSuccess
+        // Last vote
+        voteFail,
+        voteSuccess
+    }
+
+    private static readonly Logger Log = LogManager.GetLogger("Essentials Voting");
+    private static AutoCommand? _command;
+    private static string? voteInProgress;
+    private static readonly Dictionary<ulong, DateTime> _voteReg = [];
+    private static readonly Dictionary<ulong, DateTime> _voteCooldown = [];
+    public static Status VoteStatus = Status.voteStandby;
+
+    //last vote info for debugging
+    private static string? lastVoteName;
+    private static Status voteResult;
+    private static double voteResultPercentage;
+
+    [Command("vote", "starts a vote for a command")]
+    [Permission(MyPromoteLevel.None)]
+    public void Vote(string name)
+    {
+        if (Context.Player == null)
+        {
+            Context.Respond("This is an in-game command");
+            return;
         }
 
-        private static readonly Logger Log = LogManager.GetLogger("Essentials Voting");
-        private static AutoCommand _command;
-        private static string voteInProgress;
-        private static readonly Dictionary<ulong, DateTime> _voteReg = new Dictionary<ulong, DateTime>();
-        private static readonly Dictionary<ulong, DateTime> _voteCooldown = new Dictionary<ulong, DateTime>();
-        public static Status VoteStatus = Status.voteStandby;
-
-        //last vote info for debugging
-        private static string lastVoteName;
-        private static Status voteResult;
-        private static double voteResultPercentage;
-
-        [Command("vote", "starts a vote for a command")]
-        [Permission(MyPromoteLevel.None)]
-        public void Vote(string name)
+        if (VoteStatus == Status.voteInProgress)
         {
-            if (Context.Player == null)
-            {
-                Context.Respond("This is an in-game command");
-                return;
-            }
+            Context.Respond($"vote for {voteInProgress} is currently active. Use !yes to vote and !no to retract vote");
+            return;
+        }
 
-            if (VoteStatus == Status.voteInProgress)
+        _command = EssentialsPlugin.Instance.Config.AutoCommands.FirstOrDefault(c => !string.IsNullOrEmpty(c.Name) 
+                                                                                     && c.CommandTrigger == Trigger.Vote && c.Name.Equals(name));
+
+        if (_command == null)
+        {
+            Context.Respond($"Couldn't find any votable command with the name {name}");
+            return;
+        }
+
+
+        var steamid = Context.Player.SteamUserId;
+        if (_voteCooldown.TryGetValue(steamid, out var activeCooldown))
+        {
+            var difference = activeCooldown - DateTime.Now;
+            if (difference.TotalSeconds > 0)
             {
                 Context.Respond(
-                    $"vote for {voteInProgress} is currently active. Use !yes to vote and !no to retract vote");
+                    $"Cooldown active. You can use this command again in {difference.Minutes:N0} minutes : {difference.Seconds:N0} seconds");
                 return;
             }
 
-            _command = EssentialsPlugin.Instance.Config.AutoCommands.FirstOrDefault(c => !string.IsNullOrEmpty(c.Name) 
-                && c.CommandTrigger == Trigger.Vote && c.Name.Equals(name));
-
-            if (_command == null)
-            {
-                Context.Respond($"Couldn't find any votable command with the name {name}");
-                return;
-            }
-
-
-            var steamid = Context.Player.SteamUserId;
-            if (_voteCooldown.TryGetValue(steamid, out var activeCooldown))
-            {
-                var difference = activeCooldown - DateTime.Now;
-                if (difference.TotalSeconds > 0)
-                {
-                    Context.Respond(
-                        $"Cooldown active. You can use this command again in {difference.Minutes:N0} minutes : {difference.Seconds:N0} seconds");
-                    return;
-                }
-
-                _voteCooldown[steamid] = DateTime.Now.AddSeconds(_command.TriggerCount);
-            }
-
-            else
-            {
-                _voteCooldown.Add(steamid, DateTime.Now.AddSeconds(_command.TriggerCount));
-            }
-
-            var voteDuration = TimeSpan.Parse(_command.Interval);
-            // voting status
-            voteInProgress = name;
-            VoteStatus = Status.voteInProgress;
-            VoteYes();
-            var sb = new StringBuilder();
-            sb.AppendLine($"Voting started for {name} by {Context.Player.DisplayName}.");
-            sb.AppendLine("Use !yes to vote and !no to retract your vote");
-            ModCommunication.SendMessageToClients(new NotificationMessage(sb.ToString(), 15000, "Blue"));
-            //vote countdown
-            Task.Run(() =>
-            {
-                var countdown = VoteCountdown(voteDuration).GetEnumerator();
-                while (countdown.MoveNext()) Thread.Sleep(1000);
-            });
-
-            lastVoteName = voteInProgress;
+            _voteCooldown[steamid] = DateTime.Now.AddSeconds(_command.TriggerCount);
         }
 
-        [Command("vote cancel", "Cancels current vote in progress")]
-        [Permission(MyPromoteLevel.Admin)]
-        public void VoteCancel()
+        else
         {
-            if (VoteStatus == Status.voteInProgress)
-                VoteStatus = Status.voteCancel;
-            else
-                Context.Respond("A vote is not in progress");
+            _voteCooldown.Add(steamid, DateTime.Now.AddSeconds(_command.TriggerCount));
         }
 
-        [Command("vote list", "Lists all possible vote commands")]
-        [Permission(MyPromoteLevel.None)]
-        public void VoteList()
-        {
-            StringBuilder sb = new StringBuilder();
-            var voteCommands = new List<AutoCommand>(EssentialsPlugin.Instance.Config.AutoCommands.Where(x=>x.CommandTrigger == Trigger.Vote));
-            if (Context.Player == null)sb.AppendLine($"Found {voteCommands.Count}");
-            var c = 1;
-            foreach (var command in voteCommands)
-            {
-                if (string.IsNullOrEmpty(command.Name)) continue;
-                sb.AppendLine($"{c}. {command.Name}");
-                c++;
-            }
-
-            if (Context.Player == null)
-            {
-                Context.Respond(sb.ToString());
-                return;
-            }
-            ModCommunication.SendMessageTo(new DialogMessage("Vote Commands", $"Found {voteCommands.Count} vote commands", sb.ToString()),Context.Player.SteamUserId);
-        }
-
-        [Command("no", "cancel your casted vote")]
-        [Permission(MyPromoteLevel.None)]
-        public void VoteNo()
-        {
-            if (Context.Player == null)
-                return;
-
-            if (VoteStatus == Status.voteStandby)
-            {
-                Context.Respond("no vote in progress");
-                return;
-            }
-
-            var steamid = Context.Player.SteamUserId;
-
-            _voteReg.Remove(steamid);
-            Context.Respond("your vote has been retracted");
-        }
-
-        [Command("yes", "Submit a yes vote")]
-        [Permission(MyPromoteLevel.None)]
-        public void VoteYes()
-        {
-            if (Context.Player == null)
-                return;
-
-            if (VoteStatus == Status.voteStandby)
-            {
-                Context.Respond("no vote in progress");
-                return;
-            }
-
-            var steamid = Context.Player.SteamUserId;
-            if (_voteReg.TryGetValue(steamid, out var lastcommand))
-            {
-                var difference = DateTime.Now - lastcommand;
-                var _voteDuration = TimeSpan.Parse(_command.Interval);
-                if (difference.TotalSeconds < _voteDuration.TotalSeconds)
-                {
-                    Context.Respond("Your vote has already been submitted.");
-                    return;
-                }
-
-                _voteReg[steamid] = DateTime.Now;
-            }
-            else
-            {
-                _voteReg.Add(steamid, DateTime.Now);
-            }
-
-            Context.Respond("Your vote has been submitted.");
-        }
-
-        //debug
-        [Command("vote debug", "prints out info from the voting module")]
-        [Permission(MyPromoteLevel.Admin)]
-        public void VoteDebgug()
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine();
-            sb.AppendLine($"Current Vote Status: {VoteStatus.ToString()}");
-            sb.AppendLine($"Current Vote Name: {voteInProgress}");
-            sb.AppendLine($"Current vote count: {_voteReg.Count}");
-            sb.AppendLine();
-            sb.AppendLine("Last vote info");
-            if (lastVoteName != null)
-                sb.AppendLine($"Last vote: {lastVoteName}");
-            sb.AppendLine($"Last Vote Result: {voteResult.ToString()}");
-            sb.AppendLine($"Last vote percent: {voteResultPercentage}");
-            if (Context.Player == null)
-                Context.Respond(sb.ToString());
-            else if (Context?.Player?.SteamUserId > 0)
-                ModCommunication.SendMessageTo(new DialogMessage("List of Online Players", null, sb.ToString()),
-                    Context.Player.SteamUserId);
-        }
-
-        //vote reset
-        [Command("vote reset", "Resets the voting module data including cooldowns")]
-        [Permission(MyPromoteLevel.Admin)]
-        public void VoteReset()
-        {
-            if (VoteStatus == Status.voteInProgress) VoteCancel();
-            _voteReg.Clear();
-            _voteCooldown.Clear();
-            lastVoteName = null;
-            voteResult = Status.voteStandby;
-            voteResultPercentage = 0;
-            Context.Respond("Vote reset successful");
-            Log.Info($"Voting module reset by {Context.Player.DisplayName}");
-        }
-
-
+        var voteDuration = TimeSpan.Parse(_command.Interval);
+        // voting status
+        voteInProgress = name;
+        VoteStatus = Status.voteInProgress;
+        VoteYes();
+        var sb = new StringBuilder();
+        sb.AppendLine($"Voting started for {name} by {Context.Player.DisplayName}.");
+        sb.AppendLine("Use !yes to vote and !no to retract your vote");
+        ModCommunication.SendMessageToClients(new NotificationMessage(sb.ToString(), 15000, "Blue"));
         //vote countdown
-        private IEnumerable VoteCountdown(TimeSpan time)
+        Task.Run(() =>
         {
-            for (var i = time.TotalSeconds; i >= 0; i--)
+            IEnumerator countdown = VoteCountdown(voteDuration).GetEnumerator();
+            using var countdown1 = countdown as IDisposable;
+            while (countdown.MoveNext()) Thread.Sleep(1000);
+        });
+
+        lastVoteName = voteInProgress;
+    }
+
+    [Command("vote cancel", "Cancels current vote in progress")]
+    [Permission(MyPromoteLevel.Admin)]
+    public void VoteCancel()
+    {
+        if (VoteStatus == Status.voteInProgress)
+            VoteStatus = Status.voteCancel;
+        else
+            Context.Respond("A vote is not in progress");
+    }
+
+    [Command("vote list", "Lists all possible vote commands")]
+    [Permission(MyPromoteLevel.None)]
+    public void VoteList()
+    {
+        StringBuilder sb = new StringBuilder();
+        var voteCommands = new List<AutoCommand>(EssentialsPlugin.Instance.Config.AutoCommands.Where(x=>x.CommandTrigger == Trigger.Vote));
+        if (Context.Player == null)sb.AppendLine($"Found {voteCommands.Count}");
+        var c = 1;
+        foreach (var command in voteCommands)
+        {
+            if (string.IsNullOrEmpty(command.Name)) continue;
+            sb.AppendLine($"{c}. {command.Name}");
+            c++;
+        }
+
+        if (Context.Player == null)
+        {
+            Context.Respond(sb.ToString());
+            return;
+        }
+        ModCommunication.SendMessageTo(new DialogMessage("Vote Commands", $"Found {voteCommands.Count} vote commands", sb.ToString()),Context.Player.SteamUserId);
+    }
+
+    [Command("no", "cancel your casted vote")]
+    [Permission(MyPromoteLevel.None)]
+    public void VoteNo()
+    {
+        if (Context.Player == null)
+            return;
+
+        if (VoteStatus == Status.voteStandby)
+        {
+            Context.Respond("no vote in progress");
+            return;
+        }
+
+        var steamid = Context.Player.SteamUserId;
+
+        _voteReg.Remove(steamid);
+        Context.Respond("your vote has been retracted");
+    }
+
+    [Command("yes", "Submit a yes vote")]
+    [Permission(MyPromoteLevel.None)]
+    public void VoteYes()
+    {
+        if (Context.Player == null)
+            return;
+            
+        if (VoteStatus == Status.voteStandby || _command is null)
+        {
+            Context.Respond("no vote in progress");
+            return;
+        }
+
+        var steamid = Context.Player.SteamUserId;
+        if (_voteReg.TryGetValue(steamid, out var lastcommand))
+        {
+            var difference = DateTime.Now - lastcommand;
+            var _voteDuration = TimeSpan.Parse(_command.Interval);
+            if (difference.TotalSeconds < _voteDuration.TotalSeconds)
             {
-                if (VoteStatus != Status.voteInProgress || _voteReg.Count < 1)
+                Context.Respond("Your vote has already been submitted.");
+                return;
+            }
+
+            _voteReg[steamid] = DateTime.Now;
+        }
+        else
+        {
+            _voteReg.Add(steamid, DateTime.Now);
+        }
+
+        Context.Respond("Your vote has been submitted.");
+    }
+
+    //debug
+    [Command("vote debug", "prints out info from the voting module")]
+    [Permission(MyPromoteLevel.Admin)]
+    public void VoteDebgug()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine();
+        sb.AppendLine($"Current Vote Status: {VoteStatus.ToString()}");
+        sb.AppendLine($"Current Vote Name: {voteInProgress}");
+        sb.AppendLine($"Current vote count: {_voteReg.Count}");
+        sb.AppendLine();
+        sb.AppendLine("Last vote info");
+        if (lastVoteName != null)
+            sb.AppendLine($"Last vote: {lastVoteName}");
+        sb.AppendLine($"Last Vote Result: {voteResult.ToString()}");
+        sb.AppendLine($"Last vote percent: {voteResultPercentage}");
+        if (Context.Player == null)
+            Context.Respond(sb.ToString());
+        else if (Context?.Player?.SteamUserId > 0)
+            ModCommunication.SendMessageTo(new DialogMessage("List of Online Players", null, sb.ToString()),
+                Context.Player.SteamUserId);
+    }
+
+    //vote reset
+    [Command("vote reset", "Resets the voting module data including cooldowns")]
+    [Permission(MyPromoteLevel.Admin)]
+    public void VoteReset()
+    {
+        if (VoteStatus == Status.voteInProgress) VoteCancel();
+        _voteReg.Clear();
+        _voteCooldown.Clear();
+        lastVoteName = null;
+        voteResult = Status.voteStandby;
+        voteResultPercentage = 0;
+        Context.Respond("Vote reset successful");
+        Log.Info($"Voting module reset by {Context.Player.DisplayName}");
+    }
+
+
+    //vote countdown
+    private IEnumerable VoteCountdown(TimeSpan time)
+    {
+        for (var i = time.TotalSeconds; i >= 0; i--)
+        {
+            if (VoteStatus != Status.voteInProgress || _voteReg.Count < 1)
+            {
+                Context.Torch.CurrentSession.Managers.GetManager<IChatManagerClient>()
+                    .SendMessageAsSelf($"Vote for {voteInProgress} cancelled");
+                voteResult = Status.voteCancel;
+                VoteEnd();
+                yield break;
+            }
+
+            if (i >= 60 && i % 60 == 0)
+            {
+                Context.Torch.CurrentSession.Managers.GetManager<IChatManagerClient>()
+                    .SendMessageAsSelf($"Voting for {voteInProgress} ends in {i / 60} minute{Pluralize(i / 60)}.");
+                yield return null;
+            }
+
+            else if (i > 0)
+            {
+                if (i < 11)
+                    Context.Torch.CurrentSession.Managers.GetManager<IChatManagerClient>()
+                        .SendMessageAsSelf($"Voting for {voteInProgress} ends in {i} second{Pluralize(i)}.");
+                yield return null;
+            }
+            else
+            {
+                double vr = (double)_voteReg.Count / Utilities.GetOnlinePlayerCount();
+                if (vr >= _command?.TriggerRatio)
                 {
                     Context.Torch.CurrentSession.Managers.GetManager<IChatManagerClient>()
-                        .SendMessageAsSelf($"Vote for {voteInProgress} cancelled");
-                    voteResult = Status.voteCancel;
-                    VoteEnd();
-                    yield break;
+                        .SendMessageAsSelf($"Vote for {voteInProgress} is successful");
+                    voteResult = Status.voteSuccess;
+                    _command.RunNow();
                 }
-
-                if (i >= 60 && i % 60 == 0)
+                else if (vr < _command?.TriggerRatio)
                 {
                     Context.Torch.CurrentSession.Managers.GetManager<IChatManagerClient>()
-                        .SendMessageAsSelf($"Voting for {voteInProgress} ends in {i / 60} minute{Pluralize(i / 60)}.");
-                    yield return null;
+                        .SendMessageAsSelf($"Vote for {voteInProgress} failed");
+                    voteResult = Status.voteFail;
                 }
 
-                else if (i > 0)
-                {
-                    if (i < 11)
-                        Context.Torch.CurrentSession.Managers.GetManager<IChatManagerClient>()
-                            .SendMessageAsSelf($"Voting for {voteInProgress} ends in {i} second{Pluralize(i)}.");
-                    yield return null;
-                }
-                else
-                {
-                    double vr = (double)_voteReg.Count / Utilities.GetOnlinePlayerCount();
-                    if (vr >= _command.TriggerRatio)
-                    {
-                        Context.Torch.CurrentSession.Managers.GetManager<IChatManagerClient>()
-                            .SendMessageAsSelf($"Vote for {voteInProgress} is successful");
-                        voteResult = Status.voteSuccess;
-                        _command.RunNow();
-                    }
-                    else if (vr < _command.TriggerRatio)
-                    {
-                        Context.Torch.CurrentSession.Managers.GetManager<IChatManagerClient>()
-                            .SendMessageAsSelf($"Vote for {voteInProgress} failed");
-                        voteResult = Status.voteFail;
-                    }
-
-                    voteResultPercentage = vr * 100;
-                    VoteEnd();
-                    yield break;
-                }
+                voteResultPercentage = vr * 100;
+                VoteEnd();
+                yield break;
             }
         }
+    }
 
+    public void VoteEnd()
+    {
+        //Make sure it's all good for next round
+        _command = null;
+        VoteStatus = Status.voteStandby;
+        voteInProgress = null;
+        _voteReg.Clear();
+    }
 
-        public void VoteEnd()
-        {
-            //Make sure it's all good for next round
-            _command = null;
-            VoteStatus = Status.voteStandby;
-            voteInProgress = null;
-            _voteReg.Clear();
-        }
-
-        private string Pluralize(double num)
-        {
-            return num == 1 ? "" : "s";
-        }
+    private string Pluralize(double num)
+    {
+        return num == 1 ? "" : "s";
     }
 }

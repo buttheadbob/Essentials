@@ -8,6 +8,9 @@ using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.Utils;
 using Newtonsoft.Json;
+using VRage.Collections;
+using VRage.Game.Entity;
+using VRage.Groups;
 using VRage.ObjectBuilders;
 
 namespace Essentials
@@ -88,14 +91,14 @@ namespace Essentials
             return false;
         }
 
-        public static bool TryGetEntityByNameOrId(string nameOrId, out IMyEntity entity)
+        public static bool TryGetEntityByNameOrId(string nameOrId, out IMyEntity? entity)
         {
             if (long.TryParse(nameOrId, out long id))
                 return MyAPIGateway.Entities.TryGetEntityById(id, out entity);
 
-            foreach (var ent in MyEntities.GetEntities())
+            foreach (MyEntity? ent in MyEntities.GetEntities())
             {
-                if (ent.DisplayName == nameOrId)
+                if (ent?.DisplayName == nameOrId)
                 {
                     entity = ent;
                     return true;
@@ -106,7 +109,7 @@ namespace Essentials
             return false;
         }
 
-        public static IMyIdentity GetIdentityByNameOrIds(string playerNameOrIds) 
+        public static IMyIdentity? GetIdentityByNameOrIds(string playerNameOrIds) 
         {
             foreach (var identity in MySession.Static.Players.GetAllIdentities()) 
             {
@@ -128,7 +131,7 @@ namespace Essentials
             return null;
         }
 
-        public static IMyPlayer GetPlayerByNameOrId(string nameOrPlayerId)
+        public static IMyPlayer? GetPlayerByNameOrId(string nameOrPlayerId)
         {
             if (!long.TryParse(nameOrPlayerId, out long id))
             {
@@ -186,6 +189,45 @@ namespace Essentials
 
         public static Dictionary<string, object> JsonToDictionary(string json) {
             return JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
+        }
+        
+        private static Dictionary<long, List<MyCubeGrid>> GetAllGrids()
+        {
+            HashSet<long> ProcessedGridIds = [];
+            Dictionary<long, List<MyCubeGrid>> grids = [];
+        
+            // Get grid groups, if any.
+            HashSetReader<MyGroups<MyCubeGrid, MyGridMechanicalGroupData>.Group> mechGroups = MyCubeGridGroups.Static.Mechanical.Groups;
+            foreach (MyGroups<MyCubeGrid, MyGridMechanicalGroupData>.Group? group in mechGroups)
+            {
+                List<MyCubeGrid> connectedGrids = [];
+                foreach (MyGroups<MyCubeGrid, MyGridMechanicalGroupData>.Node? grid in group.Nodes)
+                {
+                    if (grid?.NodeData.Physics == null) continue;
+                    if (grid.NodeData.MarkedForClose) continue;
+                
+                    connectedGrids.Add(grid.NodeData);
+                    ProcessedGridIds.Add(grid.NodeData.EntityId);
+                }
+            
+                MyCubeGrid? biggy = connectedGrids.OrderByDescending(x => x.BlocksCount).First();
+                if (biggy is null) continue; // Something fishy with this group, move on.
+
+                grids.Add(biggy.EntityId, connectedGrids);
+            }
+        
+            // Get all grids and sort out grid groups
+            foreach (MyEntity? entity in MyEntities.GetEntities())
+            {
+                if (entity is MyCubeGrid grid)
+                {
+                    long id = grid.EntityId;
+                    if (ProcessedGridIds.Contains(id)) continue;
+                    grids.Add(grid.EntityId, [grid]);
+                }
+            }
+
+            return grids;
         }
     }
 }

@@ -1,19 +1,12 @@
 ﻿using System;
 
-namespace Essentials
-{
-    [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
-    public sealed class ConditionAttribute : Attribute
-    {
-        public string Command;
-        public string InvertCommand;
-        public string HelpText;
+namespace Essentials;
 
-        public ConditionAttribute(string command, string invertCommand = null, string helpText = null)
-        {
-            Command = command;
-            InvertCommand = invertCommand;
-            HelpText = helpText;
-        }
-    }
+[AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
+public sealed class ConditionAttribute(string command, string? invertedCommand = null, string? helpText = null) : Attribute
+{
+    public string Command => command;
+    public string? InvertCommand => invertedCommand;
+    public string? HelpText => helpText;
+    
 }

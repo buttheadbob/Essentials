@@ -2,45 +2,37 @@
 using System.IO;
 using System.Linq;
 
-namespace Essentials
+namespace Essentials;
+
+public sealed class KnownIdsStorage(string filePath)
 {
-    public sealed class KnownIdsStorage
+    private readonly HashSet<ulong> _steamIds = [];
+
+    public void Read()
     {
-        readonly HashSet<ulong> _steamIds;
-        readonly string _filePath;
+        if (!File.Exists(filePath)) return;
 
-        public KnownIdsStorage(string filePath)
+        _steamIds.Clear();
+        foreach (var line in File.ReadAllLines(filePath))
         {
-            _filePath = filePath;
-            _steamIds = new HashSet<ulong>();
-        }
-
-        public void Read()
-        {
-            if (!File.Exists(_filePath)) return;
-
-            _steamIds.Clear();
-            foreach (var line in File.ReadAllLines(_filePath))
+            if (ulong.TryParse(line.Trim(), out var steamId))
             {
-                if (ulong.TryParse(line.Trim(), out var steamId))
-                {
-                    _steamIds.Add(steamId);
-                }
+                _steamIds.Add(steamId);
             }
         }
+    }
 
-        public bool Contains(ulong steamId)
-        {
-            return _steamIds.Contains(steamId);
-        }
+    public bool Contains(ulong steamId)
+    {
+        return _steamIds.Contains(steamId);
+    }
 
-        public void Add(ulong steamId)
+    public void Add(ulong steamId)
+    {
+        if (_steamIds.Add(steamId))
         {
-            if (_steamIds.Add(steamId))
-            {
-                var lines = _steamIds.Select(s => $"{s}");
-                File.WriteAllLines(_filePath, lines);
-            }
+            var lines = _steamIds.Select(s => $"{s}");
+            File.WriteAllLines(filePath, lines);
         }
     }
 }

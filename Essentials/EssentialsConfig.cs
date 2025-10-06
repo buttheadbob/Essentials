@@ -1,11 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.IO.Compression;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.ObjectModel;
 using System.Xml;
 using System.Xml.Schema;
 using System.Xml.Serialization;
@@ -14,7 +7,6 @@ using Torch;
 using Torch.Views;
 using VRage;
 using VRage.Game;
-using VRage.ObjectBuilders;
 
 namespace Essentials
 {
@@ -27,12 +19,12 @@ namespace Essentials
         }
 
         [Display(EditorType = typeof(EmbeddedCollectionEditor))]
-        public ObservableCollection<AutoCommand> AutoCommands { get; } = new ObservableCollection<AutoCommand>();
+        public ObservableCollection<AutoCommand> AutoCommands { get; } = [];
 
         [Display(EditorType = typeof(EmbeddedCollectionEditor))]
-        public ObservableCollection<InfoCommand> InfoCommands { get; } = new ObservableCollection<InfoCommand>();
+        public ObservableCollection<InfoCommand> InfoCommands { get; } = [];
 
-        private string _motd;
+        private string _motd = string.Empty;
         [Display(Name = "Motd", Description = "Message displayed to players upon connection")]
         public string Motd { get => _motd; set => SetValue(ref _motd, value); }
 
@@ -48,14 +40,16 @@ namespace Essentials
         [Display(Name = "Override vanilla Torch/Plugin Permissions", GroupName = "Custom Ranks", Order = 2, Description = "Enabling this will cause the custom rank permissions system to overide any vanilla permissions... MAKE SURE RANKS HAVE PERMS SET BEFORE ENABLING")]
         public bool OverrideVanillaPerms { get => _overridePerms; set => SetValue(ref _overridePerms, value); }
 
+        /*  Since this is not used, disabled entirely.
         public bool _enableHomes = false;
         [Display(Name = "Enable homes functionality", GroupName = "Custom Ranks", Order = 3, Description = "Enable the custom homes system for this server.", Enabled = false)]
         public bool EnableHomes { get => _enableHomes; set => SetValue(ref _enableHomes, value); }
+        */
 
-        private string _newUserMotd;
+        private string _newUserMotd = string.Empty;
         public string NewUserMotd { get => _newUserMotd; set => SetValue(ref _newUserMotd, value); }
 
-        private string _motdUrl;
+        private string _motdUrl = string.Empty;
         [Display(Name = "MotdURL", Description = "Sets a URL to show to players when they connect. Opens in the steam overlay, if enabled.")]
         public string MotdUrl { get => _motdUrl; set => SetValue(ref _motdUrl, value); }
 
@@ -102,23 +96,23 @@ namespace Essentials
             set => SetValue(ref _cutGameTags, value);
         }
 
-        private MyObjectBuilder_Toolbar _vanillaBacking;
+        private MyObjectBuilder_Toolbar? _vanillaBacking;
 
         [XmlIgnore]
-        private MyObjectBuilder_Toolbar VanillaDefaultToolbar => _vanillaBacking ?? (_vanillaBacking = new MyToolbar(MyToolbarType.Character, 9, 9).GetObjectBuilder());
+        private MyObjectBuilder_Toolbar VanillaDefaultToolbar => _vanillaBacking ??= new MyToolbar(MyToolbarType.Character).GetObjectBuilder();
 
-        private MyObjectBuilder_Toolbar _defaultToolbar;
+        private MyObjectBuilder_Toolbar? _defaultToolbar;
 
         [Display(Visible=false)]
         //TODO!
-        public ToolbarWrapper DefaultToolbar
+        public ToolbarWrapper? DefaultToolbar
         {
             get => _defaultToolbar ?? VanillaDefaultToolbar;
             set
             {
                 bool valueChanged = false;
 
-                if (value.Data.Slots.Count == VanillaDefaultToolbar.Slots.Count)
+                if (value?.Data?.Slots.Count == VanillaDefaultToolbar.Slots.Count)
                 {
                     for (int i = 0; i < value.Data.Slots.Count; i++)
                     {
@@ -147,29 +141,31 @@ namespace Essentials
         /// </summary>
         public class ToolbarWrapper : IXmlSerializable
         {
-            public MyObjectBuilder_Toolbar Data { get; set; }
+            public MyObjectBuilder_Toolbar? Data { get; set; }
 
-            public XmlSchema GetSchema()
+            public XmlSchema? GetSchema()
             {
                 return null;
             }
 
             public void ReadXml(XmlReader reader)
             {
-                var ser = MyXmlSerializerManager.GetSerializer(typeof(MyObjectBuilder_Toolbar));
-                var o = ser.Deserialize(reader);
+                XmlSerializer? ser = MyXmlSerializerManager.GetSerializer(typeof(MyObjectBuilder_Toolbar));
+                object? o = ser.Deserialize(reader);
                 Data = (MyObjectBuilder_Toolbar)o;
             }
 
             public void WriteXml(XmlWriter writer)
             {
-                var ser = MyXmlSerializerManager.GetSerializer(typeof(MyObjectBuilder_Toolbar));
+                Data ??= new MyObjectBuilder_Toolbar();
+                
+                XmlSerializer? ser = MyXmlSerializerManager.GetSerializer(typeof(MyObjectBuilder_Toolbar));
                 ser.Serialize(writer, Data);
             }
 
-            public static implicit operator MyObjectBuilder_Toolbar(ToolbarWrapper o)
+            public static implicit operator MyObjectBuilder_Toolbar(ToolbarWrapper? o)
             {
-                return o.Data;
+                return o?.Data ?? new MyObjectBuilder_Toolbar();
             }
 
             public static implicit operator ToolbarWrapper(MyObjectBuilder_Toolbar o)

@@ -10,26 +10,29 @@ namespace Essentials.Conditions
         public string Command;
         public string InvertCommand;
         public string HelpText;
-        private MethodInfo _method;
-        public readonly ParameterInfo Parameter;
+        private readonly MethodInfo _method;
+        public readonly ParameterInfo? Parameter;
 
         public Condition(MethodInfo evalMethod, ConditionAttribute attribute)
         {
             Command = attribute.Command;
-            InvertCommand = attribute.InvertCommand;
-            HelpText = attribute.HelpText;
+            InvertCommand = attribute.InvertCommand ?? string.Empty;
+            HelpText = attribute.HelpText ?? string.Empty;
             _method = evalMethod;
+            
             if (_method.ReturnType != typeof(bool))
                 throw new TypeLoadException("Condition does not return a bool!");
+            
             var p = _method.GetParameters();
             if (p.Length < 1 || p[0].ParameterType != typeof(MyCubeGrid))
                 throw new TypeLoadException("Condition does not accept MyCubeGrid as first parameter");
+            
             if (p.Length > 2)
                 throw new TypeLoadException("Condition can only have two parameters");
-            if (p.Length == 1)
-                Parameter = null;
-            else
-                Parameter = p[1];
+            
+            Parameter = p.Length == 1 
+                ? null 
+                : p[1];
         }
 
         public bool? Evaluate(MyCubeGrid grid, string arg, bool invert, CommandContext context)
@@ -40,7 +43,7 @@ namespace Essentials.Conditions
                 context.Respond($"Condition does not accept an argument. Cannot continue!");
                 return null;
             }
-            if (string.IsNullOrEmpty(arg) && Parameter != null && !Parameter.HasDefaultValue)
+            if (string.IsNullOrEmpty(arg) && Parameter is { HasDefaultValue: false })
             {
                 context.Respond($"Condition requires an argument! {Parameter.ParameterType.Name}: {Parameter.Name} Not supplied, cannot continue!");
                 return null;
@@ -53,11 +56,11 @@ namespace Essentials.Conditions
                     return null;
                 }
 
-                result = (bool)_method.Invoke(null, new[] { grid, val });
+                result = (bool)_method.Invoke(null, [grid, val]);
             }
             else
             {
-                result = (bool)_method.Invoke(null, new object[] { grid });
+                result = (bool)_method.Invoke(null, [grid]);
             }
 
             return result != invert;
