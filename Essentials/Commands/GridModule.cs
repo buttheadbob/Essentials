@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Linq;
 using System.Text;
 using Sandbox;
@@ -16,6 +17,10 @@ using VRage.Game;
 using VRage.ObjectBuilders;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using Sandbox.Game.Entities.Character;
+using Sandbox.Game.Screens.Helpers.RadialMenuActions;
+using VRage.Collections;
+using VRage.Game.Entity;
 using VRage.Groups;
 using VRage.ObjectBuilders.Private;
 
@@ -71,68 +76,65 @@ namespace Essentials
         [Permission(MyPromoteLevel.SpaceMaster)]
         public void Eject(string gridName = null) 
         {
-            (long, List<MyCubeGrid>) gridGroups;
-
-            if (gridName == null) 
-            {
-                if(Context.Player == null) 
-                {
-                    Context.Respond("The console always has to pass a gridname!");
-                    return;
-                }
-
-                IMyCharacter character = Context.Player.Character;
-
-                if (character == null) 
-                {
-                    Context.Respond("You need to spawn into a character when not using gridname!");
-                    return;
-                }
-
-                gridGroups = GridFinder.FindLookAtGridGroupMechanical(character);
-
-                if (gridGroups.Item2.Count == 0) 
-                {
-                    Context.Respond("No grid in your line of sight found! Remember to NOT use spectator!");
-                    return;
-                }
-            } 
-            else 
-            {
-                gridGroups = GridFinder.FindGridGroupMechanical(gridName);
-
-                if (gridGroups.Item2.Count == 0) 
-                {
-                    Context.Respond($"Grid with name '{gridName}' was not found!");
-                    return;
-                }
-
-                if (gridGroups.Item2.Count > 1) 
-                {
-                    Context.Respond($"There were multiple grids with name '{gridName}' to prevent any mistakes this command will not be executed!");
-                    return;
-                }
-            }
-
-            
             int ejectedPlayersCount = 0;
 
-            foreach(var grid in gridGroups.Item2) 
-            {
-                foreach(var fatBlock in grid.GetFatBlocks()) 
-                {
-                    if (!(fatBlock is MyShipController shipController))
-                        continue;
+            // Snapshot entity list for thread safety
+            List<MyEntity> entities = MyEntities.GetEntities().ToList();
 
-                    if (shipController.Pilot != null) 
-                    {
-                        shipController.Use();
-                        ejectedPlayersCount++;
-                    }
+            List<MyCubeGrid> grids = entities
+                .OfType<MyCubeGrid>()
+                .Where(g => g.Physics != null && (gridName == null || string.Equals(g.DisplayName, gridName, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            if (!string.IsNullOrWhiteSpace(gridName))
+            {
+                if (grids.Count == 0)
+                {
+                    Context.Respond($"No grids found with name '{gridName}'.");
+                    return;
+                }
+                
+                if (grids.Count > 1)
+                {
+                    Context.Respond($"{grids.Count} grids found with name '{gridName}'.  Aborting.");
+                    return;
+                }
+                
+                // Exactly one grid matches
+                MyCubeGrid grid = grids.FirstOrDefault();
+                if (grid == null)
+                {
+                    // safety check
+                    Context.Respond($"No grids found with name '{gridName}'.");
+                    return;   
+                }
+
+                List<MyCockpit> cockpits = grid.GetFatBlocks<MyCockpit>()
+                    .Where(c => c.Pilot != null)
+                    .ToList();
+
+                foreach (MyCockpit cockpit in cockpits)
+                {
+                    cockpit.RemovePilot();
+                    ejectedPlayersCount++;
+                }
+            }
+            else
+            {
+                // No grid name given – eject everyone from all cockpits
+                List<MyCockpit> cockpits = grids
+                    .SelectMany(g => g.GetFatBlocks<MyCockpit>())
+                    .Where(c => c.Pilot != null)
+                    .ToList();
+
+                foreach (MyCockpit cockpit in cockpits)
+                {
+                    cockpit.RemovePilot();
+                    ejectedPlayersCount++;
                 }
             }
 
-            Context.Respond($"Ejected '{ejectedPlayersCount}' players from their seats.");
+            Context.Respond($"Ejected {ejectedPlayersCount} player(s){(gridName != null ? $" from '{gridName}'" : "")}.");
         }
 
         [Command("static large", "Makes all large grids static.")]
