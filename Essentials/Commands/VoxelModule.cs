@@ -1,25 +1,13 @@
 ﻿using Essentials.Utils;
 using NLog;
-using Sandbox;
-using Sandbox.Engine.Multiplayer;
 using Sandbox.Engine.Voxels;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Character;
-using Sandbox.Game.Screens.Helpers;
-using Sandbox.Game.World;
 using Sandbox.Game.World.Generator;
-using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.ExceptionServices;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Windows.Controls;
-using System.Windows.Shapes;
 using Torch.Commands;
 using Torch.Commands.Permissions;
 using Torch.Mod;
@@ -27,30 +15,26 @@ using Torch.Mod.Messages;
 using Torch.Utils;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
-using VRage.ModAPI;
-using VRage.Network;
-using VRage.Utils;
 using VRage.Voxels;
 using VRageMath;
 using static Sandbox.Game.Entities.MyVoxelBase;
-using Parallel = ParallelTasks.Parallel;
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+#pragma warning disable CS0649 // Field is never assigned to, and will always have its default value
 
 namespace Essentials.Commands
 {
     [Category("voxels")]
     public class VoxelModule : CommandModule
     {
-        private static Logger _log = LogManager.GetCurrentClassLogger();
-
-        
+        private static readonly Logger _log = LogManager.GetCurrentClassLogger();
 
         [ReflectedGetter(Name = "m_asteroidsModule")]
         private static Func<MyProceduralWorldGenerator, MyProceduralAsteroidCellGenerator> _asteroidGenerator;
         [ReflectedSetter(Name = "m_isClosingEntities")]
         private static Action<MyProceduralAsteroidCellGenerator, bool> _deletingSet;
 
-        private static MyProceduralAsteroidCellGenerator _generatorInstance;
-        private static MyProceduralAsteroidCellGenerator GeneratorInstance => _generatorInstance ?? (_generatorInstance = _asteroidGenerator(MyProceduralWorldGenerator.Static));
+        private static MyProceduralAsteroidCellGenerator? _generatorInstance;
+        private static MyProceduralAsteroidCellGenerator GeneratorInstance => _generatorInstance ??= _asteroidGenerator(MyProceduralWorldGenerator.Static);
 
         [Command("reset all", "Resets all voxel maps.")]
         public void ResetAll(bool deleteStorage = false)
@@ -254,8 +238,10 @@ namespace Essentials.Commands
         public void ResetVoxelArea(float Radius)
         {
             if (Context.Player == null)
+            {
                 Context.Respond("Invalid command input! Must be ingame!");
-
+                return;
+            }
 
             if (Radius <= 0)
             {
@@ -263,20 +249,12 @@ namespace Essentials.Commands
                 return;
             }
 
-
-            if (ResetVoxelInArea(Context.Player.GetPosition(), Radius))
-            {
-                Context.Respond("Voxel reset complete!");
-            }
-            else
-            {
-                Context.Respond("Couldnt reset voxels! Check log for more information!");
-            }
-
-
+            Context.Respond(ResetVoxelInArea(Context.Player.GetPosition(), Radius)
+                ? "Voxel reset complete!"
+                : "Couldn't reset voxels! Check log for more information!");
         }
 
-        [Command("reset gps", "Resets voxel damange in specified radius from given point")]
+        [Command("reset gps", "Resets voxel damage in specified radius from given point")]
         [Permission(MyPromoteLevel.Admin)]
         public void ResetVoxelArea(float X, float Y, float Z, float Radius)
         {
@@ -315,11 +293,11 @@ namespace Essentials.Commands
                     if (voxelMap.MarkedForClose)
                         continue;
 
-
-
-                    MyShapeSphere shape = new MyShapeSphere();
-                    shape.Center = Center;
-                    shape.Radius = Radius;
+                    MyShapeSphere shape = new ()
+                    {
+                        Center = Center,
+                        Radius = Radius
+                    };
 
                     MyVoxelGenerator.RevertShape(voxelMap, shape);
 
