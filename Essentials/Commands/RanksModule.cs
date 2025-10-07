@@ -101,16 +101,12 @@ public class RanksModule : CommandModule {
         ulong.TryParse(playerNameOrID, out var id);
         id = Utilities.GetPlayerByNameOrId(playerNameOrID)?.SteamUserId ?? id;
         /*IMyPlayer player = Utilities.GetPlayerByNameOrId(playerName);*/
-        if (id == 0) {
+        if (id == 0) 
+        {
             Context.Respond($"Player '{playerNameOrID}' not found or ID is invalid.");
             return;
         }
-        IMyPlayer? player = Utilities.GetPlayerByNameOrId(playerNameOrID);
-        if (player is null)
-        {
-            Context.Respond($"Player '{playerNameOrID}' not found or ID is invalid.");
-            return;       
-        }
+        
         if (rank == null) 
         {
             Context.Respond("Rank does not exist!");
@@ -123,7 +119,7 @@ public class RanksModule : CommandModule {
         if (!RegisteredPlayerNames.Contains(playerNameOrID) && !RegisteredPlayerSteamIDs.Contains(id)) {
             Log.Warn($"Player {playerNameOrID} does have registered player object... Creating one");
             data.Player = playerNameOrID;
-            data.SteamID = player.SteamUserId;
+            data.SteamID = id;
         }
             
         if(RegisteredPlayerNames.Contains(playerNameOrID)) 

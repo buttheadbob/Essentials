@@ -15,15 +15,15 @@ namespace Essentials;
 
 // Possibly build extension plugin which will sync discord roles with custom roles?
 public class RanksAndPermissionsModule {
-    public static List<RankData> Ranks = new List<RankData>();
-    public static PlayerAccountModule PlayerAccountModule = new PlayerAccountModule();
+    public static List<RankData> Ranks = [];
+    public static PlayerAccountModule PlayerAccountModule = new ();
     public static readonly Logger Log = LogManager.GetCurrentClassLogger();
-    public static Dictionary<ulong, List<RankData>> PlayersInheritedRanksStore = new Dictionary<ulong, List<RankData>>();
+    public static Dictionary<ulong, List<RankData>> PlayersInheritedRanksStore = [];
     public bool debug = true;
 
     public class Permissions {
-        public List<string> Allowed { get; set; } = new List<string>();
-        public List<string> Disallowed { get; set; } = new List<string>();
+        public List<string> Allowed { get; set; } = [];
+        public List<string> Disallowed { get; set; } = [];
     }
 
     public class RankData
