@@ -12,6 +12,7 @@ using VRage.Game;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using Torch.API.Managers;
+using VRageMath;
 
 namespace Essentials
 {
@@ -54,7 +55,7 @@ namespace Essentials
                 return;
             }
 
-            var targetPos = MyEntities.FindFreePlace(destEntity.GetPosition(), (float)targetEntity.WorldAABB.Extents.Max());
+            var targetPos = MyEntities.FindFreePlaceCustom(destEntity.GetPosition(), (float)targetEntity.WorldAABB.Extents.Max());
             if (targetPos == null)
             {
                 Context.Respond("No free place to teleport.");
@@ -99,7 +100,7 @@ namespace Essentials
                 return;
             }
 
-            Context.Torch.CurrentSession?.Managers?.GetManager<IChatManagerServer>()?.SendMessageAsOther(message, Context.Player?.DisplayName ?? "Server", MyFontEnum.Red, player.SteamUserId);
+            Context.Torch.CurrentSession?.Managers?.GetManager<IChatManagerServer>()?.SendMessageAsOther(message, Context.Player?.DisplayName ?? "Server", Color.Red, player.SteamUserId, MyFontEnum.Red);
         }
 
         [Command("kick", "Kick a player from the game.")]

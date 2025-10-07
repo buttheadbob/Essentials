@@ -24,9 +24,9 @@ namespace Essentials.Commands
                     {
                         return x.GetTypes();
                     }
-                    catch (Exception e) // ignored 
+                    catch (Exception) // ignored 
                     {
-                        return new Type[0];
+                        return Type.EmptyTypes;
                     }
                 }).Where(t => t.IsDefined(typeof(ConditionModule)));
 
@@ -111,50 +111,47 @@ namespace Essentials.Commands
 
 
             var resultList = new List<MyCubeGrid>();
-            Parallel.ForEach(MyCubeGridGroups.Static.Logical.Groups, (group) =>
+            
+            Dictionary<long, List<MyCubeGrid>> findResult = GridFinder.GetAllGrids();
+            foreach (var kvp in findResult)
             {
-                //if (group.Nodes.All(grid => conditions.TrueForAll(func => func(grid.NodeData))))
                 bool res = true;
-                foreach (var node in group.Nodes)
+                foreach (MyCubeGrid cubeGrid in kvp.Value)
                 {
-                    if (node.NodeData.Projector != null)
-                        continue;
-
-                    foreach (var c in conditions)
+                    foreach (Func<MyCubeGrid, bool?> condition in conditions)
                     {
-                        bool? r = c.Invoke(node.NodeData);
-                        if (r == null)
-                        {
-                            return;
-                        }
-
-                        if (r == true)
+                        bool? result = condition?.Invoke(cubeGrid);
+                        if (result == null)
                         {
                             continue;
                         }
-
+                    
+                        if (result == true)
+                        {
+                            continue;
+                        }
+                    
                         res = false;
                         break;
                     }
-
+                
                     if (!res)
                     {
                         break;
                     }
                 }
-
+            
                 if (res)
                 {
                     lock (resultList)
                     {
-                        foreach (var grid in group.Nodes.Where(x => x.NodeData.Projector == null))
+                        foreach (var grid in kvp.Value)
                         {
-                            resultList.Add(grid.NodeData);
+                            resultList.Add(grid);
                         }
                     }
                 }
-                    
-            });
+            }
 
             return resultList;
         }

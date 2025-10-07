@@ -6,6 +6,7 @@ using Torch.API.Managers;
 using Torch.Mod;
 using Torch.Mod.Messages;
 using VRage.Game;
+using VRageMath;
 
 namespace Essentials.Commands
 {
@@ -38,7 +39,7 @@ namespace Essentials.Commands
             long playerId = MySession.Static.Players.TryGetIdentityId(msg.AuthorSteamId.Value);
 
             if (!string.IsNullOrEmpty(c.ChatResponse))
-                EssentialsPlugin.Instance.Torch.CurrentSession?.Managers?.GetManager<IChatManagerServer>()?.SendMessageAsOther("Server", c.ChatResponse, MyFontEnum.Blue, msg.AuthorSteamId.Value);
+                EssentialsPlugin.Instance.Torch.CurrentSession?.Managers?.GetManager<IChatManagerServer>()?.SendMessageAsOther("Server", c.ChatResponse, Color.Blue, msg.AuthorSteamId.Value, MyFontEnum.Blue);
             if (!string.IsNullOrEmpty(c.DialogResponse))
                 ModCommunication.SendMessageTo(new DialogMessage(c.Command, content: c.DialogResponse), msg.AuthorSteamId.Value);
             if (!string.IsNullOrEmpty(c.URL))

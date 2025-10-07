@@ -15,6 +15,7 @@ using VRage.ModAPI;
 using VRage.Game;
 using VRage.ObjectBuilders;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using VRage.Groups;
 using VRage.ObjectBuilders.Private;
 
@@ -70,7 +71,7 @@ namespace Essentials
         [Permission(MyPromoteLevel.SpaceMaster)]
         public void Eject(string gridName = null) 
         {
-            ConcurrentBag<MyGroups<MyCubeGrid, MyGridMechanicalGroupData>.Group> gridGroups;
+            (long, List<MyCubeGrid>) gridGroups;
 
             if (gridName == null) 
             {
@@ -90,7 +91,7 @@ namespace Essentials
 
                 gridGroups = GridFinder.FindLookAtGridGroupMechanical(character);
 
-                if (gridGroups.Count == 0) 
+                if (gridGroups.Item2.Count == 0) 
                 {
                     Context.Respond("No grid in your line of sight found! Remember to NOT use spectator!");
                     return;
@@ -100,26 +101,24 @@ namespace Essentials
             {
                 gridGroups = GridFinder.FindGridGroupMechanical(gridName);
 
-                if (gridGroups.Count == 0) 
+                if (gridGroups.Item2.Count == 0) 
                 {
                     Context.Respond($"Grid with name '{gridName}' was not found!");
                     return;
                 }
 
-                if (gridGroups.Count > 1) 
+                if (gridGroups.Item2.Count > 1) 
                 {
                     Context.Respond($"There were multiple grids with name '{gridName}' to prevent any mistakes this command will not be executed!");
                     return;
                 }
             }
 
-            var group = gridGroups.First();
+            
             int ejectedPlayersCount = 0;
 
-            foreach(var node in group.Nodes) 
+            foreach(var grid in gridGroups.Item2) 
             {
-                MyCubeGrid grid = node.NodeData;
-
                 foreach(var fatBlock in grid.GetFatBlocks()) 
                 {
                     if (!(fatBlock is MyShipController shipController))
