@@ -87,7 +87,10 @@ namespace Essentials
                     connectedGrids.Add(grid.NodeData);
                     ProcessedGridIds.Add(grid.NodeData.EntityId);
                 }
-                
+
+                if (connectedGrids.Count == 0)
+                    continue;
+
                 MyCubeGrid biggy = connectedGrids.OrderByDescending(x => x.BlocksCount).First();
                 grids.Add(biggy.EntityId, connectedGrids);
             }
@@ -96,8 +99,7 @@ namespace Essentials
             foreach (MyCubeGrid grid in MyEntities.GetEntities().OfType<MyCubeGrid>())
             {
                 if (grid.Physics == null) continue;
-                long id = grid.EntityId;
-                if (ProcessedGridIds.Contains(id)) continue;
+                if (ProcessedGridIds.Contains(grid.EntityId)) continue;
                 grids.Add(grid.EntityId, new List<MyCubeGrid>{grid});
             }
 
