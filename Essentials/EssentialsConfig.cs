@@ -33,12 +33,12 @@ public class EssentialsConfig : ViewModel
     public ObservableCollection<InfoCommand> InfoCommands { get; } = [];
 
     [Display(Name = "Motd", Description = "Message displayed to players upon connection")]
-    public string Motd { get; set => SetValue(ref field, value); }
+    public string Motd { get; set => SetValue(ref field, value); } = "";
 
-    public string NewUserMotd { get; set => SetValue(ref field, value); }
+    public string NewUserMotd { get; set => SetValue(ref field, value); } = "";
 
     [Display(Name = "MotdURL", Description = "Sets a URL to show to players when they connect. Opens in the steam overlay, if enabled.")]
-    public string MotdUrl { get; set => SetValue(ref field, value); }
+    public string MotdUrl { get; set => SetValue(ref field, value); } = "";
 
     [Display(Name = "Url for New Users Only", Description = "MOTD URL for new users only")] 
     public bool NewUserMotdUrl { get; set => SetValue(ref field, value); }

@@ -41,22 +41,22 @@ namespace Essentials
 {
     public class EssentialsPlugin : TorchPluginBase, IWpfPlugin
     {
-        public EssentialsConfig Config => _config?.Data;
+        public EssentialsConfig Config => _config?.Data!;
         public string homeDataPath = "";
         public string rankDataPath = "";
 
-        private TorchSessionManager _sessionManager;
-        public CommandManager CommandManager;
+        private TorchSessionManager _sessionManager = null!;
+        public CommandManager CommandManager = null!;
 
-        private UserControl _control;
-        private Persistent<EssentialsConfig> _config;
+        private UserControl _control = null!;
+        private Persistent<EssentialsConfig> _config = null!;
         private static readonly Logger Log = LogManager.GetLogger("Essentials");
         private HashSet<ulong> _motdOnce = new HashSet<ulong>();
-        private PatchManager _pm;
-        private PatchContext _context;
-        private KnownIdsStorage _knownIds;
+        private PatchManager _pm = null!;
+        private PatchContext _context = null!;
+        private KnownIdsStorage _knownIds = null!;
 
-        public static EssentialsPlugin Instance { get; private set; }
+        public static EssentialsPlugin Instance { get; private set; } = null!;
         private static bool _initilized = false;
 
         /// <inheritdoc />
@@ -338,7 +338,7 @@ namespace Essentials
                 var motdMessageField = motdDataStruct.GetField("Message", BindingFlags.Public | BindingFlags.Instance);
                 var motd = motdConstructFunc.Invoke(null, new object[0]);
                 var motdMessage = motdMessageField.GetValue(motd) as string;
-                return motdMessage;
+                return motdMessage ?? "";
             }
             catch (Exception e)
             {
@@ -354,7 +354,7 @@ namespace Essentials
         {
             if (_sessionManager != null)
                 _sessionManager.SessionStateChanged -= SessionChanged;
-            _sessionManager = null;
+            _sessionManager = null!;
         }
     }
 }

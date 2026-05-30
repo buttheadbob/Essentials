@@ -15,12 +15,12 @@ namespace Essentials;
 
 public class AutoCommands : IDisposable
 {
-    protected EntityTreeViewModel Tree { get; }
+    protected EntityTreeViewModel Tree { get; } = null!;
 
-    private static AutoCommands _instance;
+    private static AutoCommands _instance = null!;
     public static AutoCommands Instance => _instance ?? (_instance = new AutoCommands());
     private static readonly Logger Log = LogManager.GetLogger("Essentials");
-    private Timer _timer;
+    private Timer _timer = null!;
     private readonly Dictionary<AutoCommand,DateTime> _simSpeedCheck  = new Dictionary<AutoCommand, DateTime>();
 
     public void Start()

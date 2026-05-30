@@ -34,7 +34,7 @@ public class GridModule : CommandModule
     public void SetOwner(string gridName, string playerName)
     {
         var firstArg = Context.Args.FirstOrDefault();
-        Utilities.TryGetEntityByNameOrId(gridName, out IMyEntity entity);
+        Utilities.TryGetEntityByNameOrId(gridName, out IMyEntity? entity);
 
         if (entity is not IMyCubeGrid grid)
         {
@@ -211,12 +211,12 @@ public class GridModule : CommandModule
             targetName = Context.Player.Controller.ControlledEntity.Entity.DisplayName;
         }
 
-        if (!Utilities.TryGetEntityByNameOrId(targetName, out var ent))
+        if (!Utilities.TryGetEntityByNameOrId(targetName, out IMyEntity? ent))
         {
             Context.Respond("Target entity not found.");
             return;
         }
-            
+
         var path = string.Format(ExportPath, gridName);
         if (!File.Exists(path))
         {
@@ -228,7 +228,7 @@ public class GridModule : CommandModule
         {
             Context.Respond($"Importing grid from {path}");
             MyEntities.RemapObjectBuilder(grid);
-            var pos = MyEntities.FindFreePlaceCustom(ent.GetPosition(), grid.CalculateBoundingSphere().Radius);
+            var pos = MyEntities.FindFreePlaceCustom(ent!.GetPosition(), grid.CalculateBoundingSphere().Radius);
             if (pos == null)
             {
                 Context.Respond("No free place.");

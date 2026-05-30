@@ -185,6 +185,6 @@ public static class Utilities
     }
 
     public static Dictionary<string, object> JsonToDictionary(string json) {
-        return JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
+        return JsonConvert.DeserializeObject<Dictionary<string, object>>(json)!;
     }
 }

@@ -31,7 +31,7 @@ public class AdminModule : CommandModule
         sb.AppendLine("Timing:");
         Stats.Timing.WriteTo(sb);
 
-        if (Context?.Player?.SteamUserId > 0)
+        if (Context.Player?.SteamUserId > 0)
             ModCommunication.SendMessageTo(new DialogMessage("Statistics", null, sb.ToString()) , Context.Player.SteamUserId);
         else
             Context.Respond(sb.ToString());
@@ -289,11 +289,11 @@ public class AdminModule : CommandModule
         Context.Respond($"ID {id} removed from reserved slots.");
     }
 
-    private static Dictionary<ulong, DateTime> _muted;
-    private Timer _muteTimer;
-    private IChatManagerServer _chatManager;
+    private static Dictionary<ulong, DateTime> _muted = null!;
+    private Timer _muteTimer = null!;
+    private IChatManagerServer _chatManager = null!;
     private IChatManagerServer ChatManager => _chatManager ?? (EssentialsPlugin.Instance.Torch.CurrentSession.Managers.GetManager<IChatManagerServer>());
-    private List<ulong> _removeCache;
+    private List<ulong> _removeCache = null!;
 
     [Command("mute", "Mutes a user in global chat for the given number of minutes.")]
     public void MuteUser(string user, int timeout = 0)
@@ -428,6 +428,7 @@ public class AdminModule : CommandModule
         else {
             foreach (var p in MySession.Static.Players.GetOnlinePlayers()) {
                 var player = Utilities.GetPlayerByNameOrId(p.DisplayName);
+                if (player == null) continue;
                 Sandbox.Game.MyVisualScriptLogicProvider.AddToPlayersInventory(p.Identity.IdentityId, defID, quantity);
                 ModCommunication.SendMessageTo(new NotificationMessage($"You have been given {quantity} {item} {itemType}", 5000, "Blue"), player.SteamUserId);
             }
