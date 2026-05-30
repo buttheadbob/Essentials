@@ -28,7 +28,7 @@ public class EntityModule : CommandModule
 {
 #pragma warning disable 649
     [ReflectedGetter(Name = "m_clientStates")]
-    private static Func<MyReplicationServer, IDictionary> _clientStates;
+    private static Func<MyReplicationServer, IDictionary> _clientStates = null!;
 
     private const string CLIENT_DATA_TYPE_NAME = "VRage.Network.MyClient, VRage";
     [ReflectedGetter(TypeName = CLIENT_DATA_TYPE_NAME, Name = "Replicables")]
@@ -80,7 +80,7 @@ public class EntityModule : CommandModule
             return;
         }
 
-        var clientReplicables = _replicables.Invoke(clientData);
+        var clientReplicables = _replicables!.Invoke(clientData);
 
         var replicableList = new List<IMyReplicable>(clientReplicables.Count);
         foreach (var pair in clientReplicables)
@@ -99,13 +99,13 @@ public class EntityModule : CommandModule
     [Permission(MyPromoteLevel.SpaceMaster)]
     public void Stop(string entityName)
     {
-        if (!Utilities.TryGetEntityByNameOrId(entityName, out IMyEntity entity))
+        if (!Utilities.TryGetEntityByNameOrId(entityName, out IMyEntity? entity))
         {
             Context.Respond($"Entity '{entityName}' not found.");
             return;
         }
 
-        entity.Physics?.ClearSpeed();
+        entity!.Physics?.ClearSpeed();
         Context.Respond($"Entity '{entity.DisplayName}' stopped");
     }
 
@@ -117,7 +117,7 @@ public class EntityModule : CommandModule
         if (string.IsNullOrEmpty(name))
             return;
 
-        if (!Utilities.TryGetEntityByNameOrId(name, out IMyEntity entity))
+        if (!Utilities.TryGetEntityByNameOrId(name, out IMyEntity? entity))
         {
             Context.Respond($"Entity '{name}' not found.");
             return;
@@ -129,7 +129,7 @@ public class EntityModule : CommandModule
             return;
         }
 
-        entity.Close();
+        entity!.Close();
         Context.Respond($"Entity '{entity.DisplayName}' deleted");
     }
 
@@ -156,7 +156,7 @@ public class EntityModule : CommandModule
          * If we could not find the player there is a chance he is offline, in that case we try inflicting
          * damage to the character as the VST will not help us with offline characters.
          */
-        if (!Utilities.TryGetEntityByNameOrId(playerName, out IMyEntity entity)) {
+        if (!Utilities.TryGetEntityByNameOrId(playerName, out IMyEntity? entity)) {
             Context.Respond($"Entity '{playerName}' not found.");
             return;
         }
@@ -200,7 +200,7 @@ public class EntityModule : CommandModule
         if (string.IsNullOrEmpty(name))
             return;
 
-        if (!Utilities.TryGetEntityByNameOrId(name, out IMyEntity entity))
+        if (!Utilities.TryGetEntityByNameOrId(name, out IMyEntity? entity))
         {
             Context.Respond($"Entity '{name}' not found.");
             return;
@@ -221,7 +221,7 @@ public class EntityModule : CommandModule
         {
             item.Enabled = false;
         }
-        Context.Respond($"Entity '{entity.DisplayName}' powered off");
+        Context.Respond($"Entity '{entity!.DisplayName}' powered off");
     }
 
     [Command("poweron", "Power on entities with the given text in their name.")]
@@ -231,7 +231,7 @@ public class EntityModule : CommandModule
         if (string.IsNullOrEmpty(name))
             return;
 
-        if (!Utilities.TryGetEntityByNameOrId(name, out IMyEntity entity))
+        if (!Utilities.TryGetEntityByNameOrId(name, out IMyEntity? entity))
         {
             Context.Respond($"Entity '{name}' not found.");
             return;
@@ -252,7 +252,7 @@ public class EntityModule : CommandModule
         {
             item.Enabled = true;
         }
-        Context.Respond($"Entity '{entity.DisplayName}' powered on");
+        Context.Respond($"Entity '{entity!.DisplayName}' powered on");
     }
 
     [Command("eject", "Ejects a specific player from any block they are seated in, or all players in the server if run with 'all'")]

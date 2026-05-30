@@ -20,7 +20,7 @@ namespace Essentials
     /// </summary>
     public partial class EssentialsControl : UserControl
     {
-        private EssentialsPlugin Plugin { get; }
+        private EssentialsPlugin Plugin { get; } = null!;
 
         public EssentialsControl()
         {

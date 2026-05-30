@@ -20,13 +20,13 @@ namespace Essentials.Patches
     {
         [ReflectedMethodInfo(typeof(MyCachedServerItem), "SendSettingsToSteam")]
 #pragma warning disable 649
-        private static readonly MethodInfo _sendSettingsToSteamMethod;
+        private static readonly MethodInfo _sendSettingsToSteamMethod = null!;
 
         [ReflectedMethodInfo(typeof(GameTagsPatch), nameof(Prefix))]
-        private static readonly MethodInfo _prefix;
+        private static readonly MethodInfo _prefix = null!;
 
         [ReflectedMethod(Name = "MemberwiseClone")]
-        private static Func<object, object> _memberwiseClone;
+        private static Func<object, object> _memberwiseClone = null!;
 #pragma warning restore 649
         
         public static void Patch(PatchContext ctx)

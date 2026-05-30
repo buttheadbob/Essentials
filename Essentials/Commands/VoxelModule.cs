@@ -51,7 +51,7 @@ public class VoxelModule : CommandModule
 
     private static MyProceduralAsteroidCellGenerator? _generatorInstance;
         
-    private static MyProceduralAsteroidCellGenerator? GeneratorInstance => _generatorInstance ?? (_generatorInstance = _asteroidGenerator(MyProceduralWorldGenerator.Static));
+    private static MyProceduralAsteroidCellGenerator? GeneratorInstance => _generatorInstance ?? (_generatorInstance = _asteroidGenerator!(MyProceduralWorldGenerator.Static));
 
     [Command("reset all", "Resets all voxel maps.")]
     public void ResetAll(bool deleteStorage = false)
@@ -339,12 +339,12 @@ public class VoxelModule : CommandModule
     {
         public LockToken()
         {
-            _deletingSet?.Invoke(GeneratorInstance, true);
+            _deletingSet?.Invoke(GeneratorInstance!, true);
         }
 
         public void Dispose()
         {
-            _deletingSet?.Invoke(GeneratorInstance, false);
+            _deletingSet?.Invoke(GeneratorInstance!, false);
         }
     }
 }

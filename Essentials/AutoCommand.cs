@@ -24,7 +24,7 @@ namespace Essentials
         private Trigger _trigger = Trigger.Disabled;
         private Gtl _comparer = Gtl.LessThan;
         private int _currentStep;
-        private string _name;
+        private string _name = null!;
         private float _triggerRatio;
         private double _triggerCount;
         private bool _isRunning;
@@ -144,7 +144,7 @@ namespace Essentials
         public class CommandStep : ViewModel
         {
             internal TimeSpan DelaySpan;
-            private string _command;
+            private string _command = null!;
 
             [Display(Description = "Delay AFTER this step and BEFORE the next step. Format is HH:MM:SS.")]
             public string Delay
@@ -181,7 +181,7 @@ namespace Essentials
             }
         }
 
-        private CancellationTokenSource _cTokenSource;
+        private CancellationTokenSource? _cTokenSource;
 
         /// <summary>
         /// Runs the command and all steps immediately, in a new thread
@@ -205,7 +205,7 @@ namespace Essentials
                 }
             }, token);
             
-            _cTokenSource.Dispose();
+            _cTokenSource!.Dispose();
             _isRunning = false;
         }
 
