@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Sandbox.ModAPI;
+using VRageMath;
 using Vector3D = VRageMath.Vector3D;
 
 namespace Essentials.Commands
@@ -93,7 +94,7 @@ namespace Essentials.Commands
                 // Check if grid is owner by an NPC.
                 case "npc":
                 case "npcs":
-                    return gridOwnerType == Utils.Ownership.OwnerType.NPC;
+                    return gridOwnerType == Utils.Ownership.OwnerType.Npc;
 
                 // Check if the grid is owned by a Player.
                 case "player":
@@ -179,12 +180,10 @@ namespace Essentials.Commands
             //        the grid is powered
             // Otherwise, returns 'false'
             dist *= dist;
-            return MyEntities.GetEntities().Where(
-                x => 
-                (VRageMath.Vector3.DistanceSquared(x.PositionComp.GetPosition(), grid.PositionComp.GetPosition()) < dist 
-                    && (x.GetType() == typeof(MyCubeGrid))                
-                )).Cast<MyCubeGrid>().Where(y => !y.EntityId.Equals(grid.EntityId) && y.IsPowered)
-            .Count() == 0;           
+            return MyEntities.GetEntities()
+                .Where(x => Vector3.DistanceSquared(x.PositionComp.GetPosition(), grid.PositionComp.GetPosition()) < dist && x.GetType() == typeof(MyCubeGrid))
+                .Cast<MyCubeGrid>()
+                .Count(y => !y.EntityId.Equals(grid.EntityId) && y.IsPowerSwitchOn) == 0;           
         }
 
         [Condition("centerdistancelessthan", "centerdistancegreaterthan", "Finds grids that are further than the given distance from center.")]

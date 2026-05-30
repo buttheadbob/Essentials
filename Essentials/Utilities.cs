@@ -10,182 +10,181 @@ using VRage.Utils;
 using Newtonsoft.Json;
 using VRage.ObjectBuilders;
 
-namespace Essentials
+namespace Essentials;
+
+public static class Utilities
 {
-    public static class Utilities
+    public static bool HasBlockType(this IMyCubeGrid grid, string typeName)
     {
-        public static bool HasBlockType(this IMyCubeGrid grid, string typeName)
-        {
-            foreach (var block in ((MyCubeGrid)grid).GetFatBlocks())
+        foreach (var block in ((MyCubeGrid)grid).GetFatBlocks())
 
-                if (string.Compare(block.BlockDefinition.Id.TypeId.ToString().Substring(16), typeName, StringComparison.InvariantCultureIgnoreCase) == 0)
-                    return true;
+            if (string.Compare(block.BlockDefinition.Id.TypeId.ToString().Substring(16), typeName, StringComparison.InvariantCultureIgnoreCase) == 0)
+                return true;
 
-            return false;
-        }
+        return false;
+    }
 
-        public static bool HasBlockSubtype(this IMyCubeGrid grid, string subtypeName)
-        {
-            foreach (var block in ((MyCubeGrid)grid).GetFatBlocks())
-                if (string.Compare(block.BlockDefinition.Id.SubtypeName, subtypeName, StringComparison.InvariantCultureIgnoreCase) == 0)
-                    return true;
+    public static bool HasBlockSubtype(this IMyCubeGrid grid, string subtypeName)
+    {
+        foreach (var block in ((MyCubeGrid)grid).GetFatBlocks())
+            if (string.Compare(block.BlockDefinition.Id.SubtypeName, subtypeName, StringComparison.InvariantCultureIgnoreCase) == 0)
+                return true;
 
-            return false;
-        }
+        return false;
+    }
         
-        public static bool HasBlockTypeFast(this IMyCubeGrid grid, string typeName)
+    public static bool HasBlockTypeFast(this IMyCubeGrid grid, string typeName)
+    {
+        var types = typeName.Split([","], StringSplitOptions.RemoveEmptyEntries);
+        var list = new List<MyObjectBuilderType>();
+
+        foreach (var s in types)
         {
-            var types = typeName.Split(new string[] {","}, StringSplitOptions.RemoveEmptyEntries);
-            var list = new List<MyObjectBuilderType>();
-
-            foreach (var s in types)
+            if (MyObjectBuilderType.TryParse(s, out var typeId))
             {
-                if (MyObjectBuilderType.TryParse(s, out var typeId))
-                {
-                    list.Add(typeId);
-                }
+                list.Add(typeId);
             }
+        }
 
-            if (list.Count == 0)
-            {
-                return false;
-            }
+        if (list.Count == 0)
+        {
+            return false;
+        }
             
-            foreach (var block in ((MyCubeGrid) grid).GetFatBlocks())
-            {
-                for (var i = 0; i < list.Count; i++)
-                {
-                    if (block.BlockDefinition.Id.TypeId == list[i])
-                    {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        public static bool HasBlockSubtypeFast(this IMyCubeGrid grid, string subtypeName)
+        foreach (var block in ((MyCubeGrid) grid).GetFatBlocks())
         {
-            var subtypes = subtypeName.Split(new string[] {","}, StringSplitOptions.RemoveEmptyEntries);
-            var list = new List<MyStringHash>();
-
-            foreach (var s in subtypes)
+            for (var i = 0; i < list.Count; i++)
             {
-                list.Add(MyStringHash.TryGet(s));
-            }
-
-            foreach (var block in ((MyCubeGrid) grid).GetFatBlocks())
-            {
-                for (var i = 0; i < list.Count; i++)
+                if (block.BlockDefinition.Id.TypeId == list[i])
                 {
-                    if (block.BlockDefinition.Id.SubtypeId == list[i])
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-        }
-
-        public static bool TryGetEntityByNameOrId(string nameOrId, out IMyEntity entity)
-        {
-            if (long.TryParse(nameOrId, out long id))
-                return MyAPIGateway.Entities.TryGetEntityById(id, out entity);
-
-            foreach (var ent in MyEntities.GetEntities())
-            {
-                if (ent.DisplayName == nameOrId)
-                {
-                    entity = ent;
                     return true;
                 }
             }
+        }
+        return false;
+    }
 
-            entity = null;
-            return false;
+    public static bool HasBlockSubtypeFast(this IMyCubeGrid grid, string subtypeName)
+    {
+        var subtypes = subtypeName.Split([","], StringSplitOptions.RemoveEmptyEntries);
+        var list = new List<MyStringHash>();
+
+        foreach (var s in subtypes)
+        {
+            list.Add(MyStringHash.TryGet(s));
         }
 
-        public static IMyIdentity GetIdentityByNameOrIds(string playerNameOrIds) 
+        foreach (var block in ((MyCubeGrid) grid).GetFatBlocks())
         {
-            foreach (var identity in MySession.Static.Players.GetAllIdentities()) 
+            for (var i = 0; i < list.Count; i++)
             {
-                if (identity.DisplayName == playerNameOrIds)
+                if (block.BlockDefinition.Id.SubtypeId == list[i])
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    public static bool TryGetEntityByNameOrId(string nameOrId, out IMyEntity? entity)
+    {
+        if (long.TryParse(nameOrId, out long id))
+            return MyAPIGateway.Entities.TryGetEntityById(id, out entity);
+
+        foreach (var ent in MyEntities.GetEntities())
+        {
+            if (ent.DisplayName == nameOrId)
+            {
+                entity = ent;
+                return true;
+            }
+        }
+
+        entity = null;
+        return false;
+    }
+
+    public static IMyIdentity? GetIdentityByNameOrIds(string playerNameOrIds) 
+    {
+        foreach (var identity in MySession.Static.Players.GetAllIdentities()) 
+        {
+            if (identity.DisplayName == playerNameOrIds)
+                return identity;
+
+            if (long.TryParse(playerNameOrIds, out long identityId)) 
+                if (identity.IdentityId == identityId)
                     return identity;
 
-                if (long.TryParse(playerNameOrIds, out long identityId)) 
-                    if (identity.IdentityId == identityId)
-                        return identity;
-
-                if (ulong.TryParse(playerNameOrIds, out ulong steamId)) 
-                {
-                    ulong id = GetSteamId(identity.IdentityId);
-                    if (id == steamId)
-                        return identity;
-                }
-            }
-
-            return null;
-        }
-
-        public static IMyPlayer GetPlayerByNameOrId(string nameOrPlayerId)
-        {
-            if (!long.TryParse(nameOrPlayerId, out long id))
+            if (ulong.TryParse(playerNameOrIds, out ulong steamId)) 
             {
-                foreach (var identity in MySession.Static.Players.GetAllIdentities())
-                {
-                    if (identity.DisplayName == nameOrPlayerId)
-                    {
-                        id = identity.IdentityId;
-                    }
-                }
+                ulong id = GetSteamId(identity.IdentityId);
+                if (id == steamId)
+                    return identity;
             }
+        }
 
-            if (MySession.Static.Players.TryGetPlayerId(id, out MyPlayer.PlayerId playerId))
+        return null;
+    }
+
+    public static IMyPlayer? GetPlayerByNameOrId(string nameOrPlayerId)
+    {
+        if (!long.TryParse(nameOrPlayerId, out long id))
+        {
+            foreach (var identity in MySession.Static.Players.GetAllIdentities())
             {
-                if (MySession.Static.Players.TryGetPlayerById(playerId, out MyPlayer player))
+                if (identity.DisplayName == nameOrPlayerId)
                 {
-                    return player;
+                    id = identity.IdentityId;
                 }
             }
-
-            return null;
         }
 
-        public static ulong GetSteamId(long identityId) 
+        if (MySession.Static.Players.TryGetPlayerId(id, out MyPlayer.PlayerId playerId))
         {
-            return MySession.Static.Players.TryGetSteamId(identityId);
+            if (MySession.Static.Players.TryGetPlayerById(playerId, out MyPlayer player))
+            {
+                return player;
+            }
         }
 
-        public static int GetOnlinePlayerCount()
-        {
-            var result = 0;
+        return null;
+    }
 
-            result =  MySession.Static.Players.GetOnlinePlayers()
-                .Count(x => x.IsRealPlayer && !string.IsNullOrEmpty(x.DisplayName));
+    public static ulong GetSteamId(long identityId) 
+    {
+        return MySession.Static.Players.TryGetSteamId(identityId);
+    }
 
-            return result;
-        }
+    public static int GetOnlinePlayerCount()
+    {
+        var result = 0;
 
-        public static List<MyPlayer> GetOnlinePlayers()
-        {
-            var result = new List<MyPlayer>(MySession.Static.Players.GetOnlinePlayers()
-                .Where(x => x.IsRealPlayer && !string.IsNullOrEmpty(x.DisplayName)));
-            return result;
-        }
+        result =  MySession.Static.Players.GetOnlinePlayers()
+            .Count(x => x.IsRealPlayer && !string.IsNullOrEmpty(x.DisplayName));
 
-        public static string FormatDataSize(double size)
-        {
-            string p = MyUtils.FormatByteSizePrefix(ref size);
-            return $"{size:N}{p}B";
-        }
+        return result;
+    }
 
-        public static string DictionaryToJson(Dictionary<string, object> dict) {
-            return JsonConvert.SerializeObject(dict, Formatting.Indented);
-        }
+    public static List<MyPlayer> GetOnlinePlayers()
+    {
+        var result = new List<MyPlayer>(MySession.Static.Players.GetOnlinePlayers()
+            .Where(x => x.IsRealPlayer && !string.IsNullOrEmpty(x.DisplayName)));
+        return result;
+    }
 
-        public static Dictionary<string, object> JsonToDictionary(string json) {
-            return JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
-        }
+    public static string FormatDataSize(double size)
+    {
+        string p = MyUtils.FormatByteSizePrefix(ref size);
+        return $"{size:N}{p}B";
+    }
+
+    public static string DictionaryToJson(Dictionary<string, object> dict) {
+        return JsonConvert.SerializeObject(dict, Formatting.Indented);
+    }
+
+    public static Dictionary<string, object> JsonToDictionary(string json) {
+        return JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
     }
 }

@@ -1,49 +1,9 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.IO.Compression;
-using System.Linq;
-using System.Reflection;
-using System.Threading.Tasks;
-using System.Xml.Serialization;
-using Essentials.Utils;
+﻿using System.Reflection;
 using NLog;
-using ParallelTasks;
-using Sandbox;
 using Sandbox.Engine.Multiplayer;
-using Sandbox.Engine.Physics;
-using Sandbox.Engine.Utils;
-using Sandbox.Engine.Voxels;
-using Sandbox.Game.Entities;
-using Sandbox.Game.Entities.Character;
-using Sandbox.Game.GameSystems;
-using Sandbox.Game.Multiplayer;
-using Sandbox.Game.Screens.Helpers;
-using Sandbox.Game.SessionComponents;
-using Sandbox.Game.World;
-using Sandbox.ModAPI;
-using SpaceEngineers.Game.Entities.Blocks;
-using Torch.API.Managers;
-using Torch.API.Session;
 using Torch.Managers.PatchManager;
-using Torch.Utils;
-using VRage;
-using VRage.Collections;
 using VRage.Game;
-using VRage.Game.Components;
-using VRage.Game.Entity;
-using VRage.Game.ModAPI;
 using VRage.Game.ObjectBuilders.Components;
-using VRage.GameServices;
-using VRage.Network;
-using VRage.ObjectBuilders;
-using VRage.Replication;
-using VRage.Serialization;
-using VRageMath;
-using Parallel = ParallelTasks.Parallel;
 
 namespace Essentials.Patches
 {
@@ -54,17 +14,19 @@ namespace Essentials.Patches
     ///     in order to speed up the client join process, avoiding lag spikes on new connections.
     /// 
     ///     This code is **NOT** free to use, under the Apache license. You know who this message is for.
+    ///
+    ///    ----------------------------------------------------------------------------------------------------
+    ///     Don't know who that message is for, but you cannot add private code to a public repo.  So it's all
+    ///     public code as far as I'm concerned.
     /// </summary>
     public class SessionDownloadPatch
     {
         private static readonly Logger Log = LogManager.GetCurrentClassLogger();
 
-
         public static void Patch(PatchContext ctx)
         {
             ctx.GetPattern(typeof(MyMultiplayerServerBase).GetMethod("CleanUpData", BindingFlags.NonPublic | BindingFlags.Static)).Suffixes.Add(typeof(SessionDownloadPatch).GetMethod(nameof(CleanupClientWorld), BindingFlags.NonPublic | BindingFlags.Static));
         }
-
 
         private static void CleanupClientWorld(MyObjectBuilder_World worldData, ulong playerId, long senderIdentity)
         {
@@ -79,17 +41,13 @@ namespace Essentials.Patches
              * 
              */
 
-
-
             //I know ALEs stuff removes this, but lets just add it in essentials too
-            foreach (var Identity in worldData.Checkpoint.Identities)
+            foreach (var identity in worldData.Checkpoint.Identities)
             {
                 //Clear all put sender identity last death position
-                if (Identity.IdentityId != senderIdentity)
-                    Identity.LastDeathPosition = null;
-
+                if (identity.IdentityId != senderIdentity)
+                    identity.LastDeathPosition = null;
             }
-
 
             //I dont trust keen to do it
             worldData.Checkpoint.Gps.Dictionary.TryGetValue(senderIdentity, out MyObjectBuilder_Gps value);
@@ -99,58 +57,32 @@ namespace Essentials.Patches
                 worldData.Checkpoint.Gps.Dictionary.Add(senderIdentity, value);
             }
 
-
-
-            foreach (var SessionComponent in worldData.Checkpoint.SessionComponents)
+            foreach (var sessionComponent in worldData.Checkpoint.SessionComponents)
             {
 
-                if (SessionComponent is MyObjectBuilder_SessionComponentResearch)
+                if (sessionComponent is MyObjectBuilder_SessionComponentResearch component)
                 {
-                    MyObjectBuilder_SessionComponentResearch Component = (MyObjectBuilder_SessionComponentResearch)SessionComponent;
-
-
-
                     // Remove everyone elses research shit (quick and dirty)
-                    for(int i = Component.Researches.Count-1; i >= 0; i--)
+                    for(int i = component.Researches.Count-1; i >= 0; i--)
                     {
-                        if (Component.Researches[i].IdentityId == senderIdentity)
+                        if (component.Researches[i].IdentityId == senderIdentity)
                             continue;
 
-                        Component.Researches.RemoveAt(i);
+                        component.Researches.RemoveAt(i);
                     }
-
-
-
-
-
-
-
                 }
-
-
-
-
             }
 
-
-            foreach (var Player in worldData.Checkpoint.AllPlayersData.Dictionary)
+            foreach (var player in worldData.Checkpoint.AllPlayersData.Dictionary)
             {
 
-                if (Player.Value.IdentityId == senderIdentity)
+                if (player.Value.IdentityId == senderIdentity)
                     continue;
 
-
                 //Clear toolbar junk for other players. Seriously keen what the FUCK
-                Player.Value.Toolbar = null;
-
+                player.Value.Toolbar = null;
             }
-
-
         }
-
-
-
-
 
         /*
         private static MyObjectBuilder_Checkpoint GetClientCheckpoint(ulong steamId)

@@ -57,8 +57,6 @@ namespace Essentials
         private KnownIdsStorage _knownIds;
 
         public static EssentialsPlugin Instance { get; private set; }
-        public PlayerAccountModule AccModule = new PlayerAccountModule();
-        RanksAndPermissionsModule RanksAndPermissions = new RanksAndPermissionsModule();
         private static bool _initilized = false;
 
         /// <inheritdoc />
@@ -88,14 +86,10 @@ namespace Essentials
                 File.Create(homeDataPath);
             }
             
-
-
             rankDataPath = Path.Combine(StoragePath, "ranks.json");
             if (!File.Exists(rankDataPath)) {
                 File.Create(rankDataPath);
             }
-            
-
 
             Instance = this;
             _pm = torch.Managers.GetManager<PatchManager>();
@@ -125,38 +119,21 @@ namespace Essentials
             switch (state)
             {
                 case TorchSessionState.Loading:
-                    string homeData = File.ReadAllText(homeDataPath);
-                    if (!string.IsNullOrEmpty(homeData)) {
-                        PlayerAccountModule.PlayersAccounts = JsonConvert.DeserializeObject<List<PlayerAccountModule.PlayerAccountData>>(File.ReadAllText(homeDataPath));
-                    }
-
-                    string rankdata = File.ReadAllText(rankDataPath);
-                    if (!string.IsNullOrEmpty(rankdata)) {
-                        RanksAndPermissionsModule.Ranks = JsonConvert.DeserializeObject<List<RanksAndPermissionsModule.RankData>>(File.ReadAllText(rankDataPath));
-                    }
 
                     break;
 
                 case TorchSessionState.Loaded:
-                    mpMan.PlayerJoined += AccModule.GenerateAccount;
-                    mpMan.PlayerJoined += AccModule.CheckIp;
                     mpMan.PlayerJoined += MotdOnce;
-                    if (Config.EnableRanks) {
-                        RanksAndPermissions.GenerateRank(Config.DefaultRank);
-                        mpMan.PlayerJoined += RanksAndPermissions.RegisterInheritedRanks;
-                        AccModule.ValidateRanks();
-                    }
 
                     mpMan.PlayerLeft += ResetMotdOnce;
-                    cmdMan.OnCommandExecuting +=RanksAndPermissions.HasCommandPermission;
                     MyEntities.OnEntityAdd += EntityAdded;
                     if(Config.StopShipsOnStart)
                         StopShips();
                     _control?.Dispatcher.Invoke(() =>
-                                               {
-                                                   _control.IsEnabled = true;
-                                                   _control.DataContext = Config;
-                                               });
+                       {
+                           _control.IsEnabled = true;
+                           _control.DataContext = Config;
+                       });
                     AutoCommands.Instance.Start();
                     InfoModule.Init();
                     _initilized = true;
@@ -169,9 +146,6 @@ namespace Essentials
 
                     if (_initilized)
                     {
-                        //Dont try and remove these unless server was actually fully initlized
-                        Log.Info("Unloading rank data into JSON");
-                        RanksAndPermissions.SaveRankData();
                         mpMan.PlayerLeft -= ResetMotdOnce;
                         mpMan.PlayerJoined -= MotdOnce;
                         MyEntities.OnEntityAdd -= EntityAdded;

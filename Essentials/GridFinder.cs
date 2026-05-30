@@ -7,103 +7,99 @@ using VRage.Game.ModAPI;
 using VRage.Groups;
 using VRageMath;
 
-namespace Essentials
+namespace Essentials;
+
+public class GridFinder 
 {
-    public class GridFinder 
+    public static (long, List<MyCubeGrid>) FindGridGroupMechanical(string gridNameOrId) 
     {
-        public static (long, List<MyCubeGrid>) FindGridGroupMechanical(string gridNameOrId) 
+        Dictionary<long, List<MyCubeGrid>> grids = GetAllGrids();
+        KeyValuePair<long, List<MyCubeGrid>> kvp = grids.FirstOrDefault(x => x.Value.Any(y => y.DisplayName.Equals(gridNameOrId, StringComparison.OrdinalIgnoreCase) || y.EntityId.ToString() == gridNameOrId));
+
+        return (kvp.Key, kvp.Value);
+    }
+
+    public static (long, List<MyCubeGrid>) FindLookAtGridGroupMechanical(IMyCharacter controlledEntity) 
+    {
+        const float range = 5000;
+
+        Matrix worldMatrix = controlledEntity.GetHeadMatrix(true); // dead center of player cross-hairs, or the direction the player is looking with ALT.
+        Vector3D startPosition = worldMatrix.Translation + worldMatrix.Forward * 0.5f;
+        Vector3D endPosition = worldMatrix.Translation + worldMatrix.Forward * (range + 0.5f);
+
+        (double,IMyCubeGrid?) closestGrid = (-1, null);
+        RayD ray = new RayD(startPosition, worldMatrix.Forward);
+
+        foreach (IMyCubeGrid cubeGrid in MyEntities.GetEntities().OfType<IMyCubeGrid>()) 
         {
-            Dictionary<long, List<MyCubeGrid>> grids = GetAllGrids();
-            KeyValuePair<long, List<MyCubeGrid>> kvp = grids.FirstOrDefault(x => x.Value.Any(y => y.DisplayName.Equals(gridNameOrId, StringComparison.OrdinalIgnoreCase) || y.EntityId.ToString() == gridNameOrId));
+            if (cubeGrid.Physics == null)
+                continue;
 
-            return (kvp.Key, kvp.Value);
-        }
+            // check if the ray comes anywhere near the Grid before continuing.    
+            if (!ray.Intersects(cubeGrid.WorldAABB).HasValue)
+                continue;
 
-        public static (long, List<MyCubeGrid>) FindLookAtGridGroupMechanical(IMyCharacter controlledEntity) 
-        {
-            const float range = 5000;
-            Matrix worldMatrix;
-            Vector3D startPosition;
-            Vector3D endPosition;
+            Vector3I? hit = cubeGrid.RayCastBlocks(startPosition, endPosition);
+            if (!hit.HasValue)
+                continue;
 
-            worldMatrix = controlledEntity.GetHeadMatrix(true, true, false); // dead center of player cross-hairs, or the direction the player is looking with ALT.
-            startPosition = worldMatrix.Translation + worldMatrix.Forward * 0.5f;
-            endPosition = worldMatrix.Translation + worldMatrix.Forward * (range + 0.5f);
+            double distance = (startPosition - cubeGrid.GridIntegerToWorld(hit.Value)).Length();
 
-            (double,IMyCubeGrid) closestGrid = (-1, null);
-            RayD ray = new RayD(startPosition, worldMatrix.Forward);
-
-            foreach (IMyCubeGrid cubeGrid in MyEntities.GetEntities().OfType<IMyCubeGrid>()) 
-            {
-                if (cubeGrid.Physics == null)
-                    continue;
-
-                // check if the ray comes anywhere near the Grid before continuing.    
-                if (!ray.Intersects(cubeGrid.WorldAABB).HasValue)
-                    continue;
-
-                Vector3I? hit = cubeGrid.RayCastBlocks(startPosition, endPosition);
-                if (!hit.HasValue)
-                    continue;
-
-                double distance = (startPosition - cubeGrid.GridIntegerToWorld(hit.Value)).Length();
-
-                if (closestGrid.Item2 is null)
-                {
-                    closestGrid.Item1 = distance;
-                    closestGrid.Item2 = cubeGrid;
-                    continue;
-                }
-
-                if (distance < closestGrid.Item1)
-                {
-                    closestGrid.Item1 = distance;
-                    closestGrid.Item2 = cubeGrid;
-                }
-            }
-
-            // No grids nearby
             if (closestGrid.Item2 is null)
-                return (0, new List<MyCubeGrid>());
-            
-            return FindGridGroupMechanical(closestGrid.Item2.DisplayName);
+            {
+                closestGrid.Item1 = distance;
+                closestGrid.Item2 = cubeGrid;
+                continue;
+            }
+
+            if (distance < closestGrid.Item1)
+            {
+                closestGrid.Item1 = distance;
+                closestGrid.Item2 = cubeGrid;
+            }
         }
 
-        public static Dictionary<long, List<MyCubeGrid>> GetAllGrids()
+        // No grids nearby
+        if (closestGrid.Item2 is null)
+            return (0, new List<MyCubeGrid>());
+            
+        return FindGridGroupMechanical(closestGrid.Item2.DisplayName);
+    }
+
+    public static Dictionary<long, List<MyCubeGrid>> GetAllGrids()
+    {
+        HashSet<long> processedGridIds = [];
+        Dictionary<long, List<MyCubeGrid>> grids = [];
+            
+        // Get grid groups, if any. (If a grid has no connections to another grid, it will not be in a group)
+        HashSetReader<MyGroups<MyCubeGrid, MyGridMechanicalGroupData>.Group> mechGroups = MyCubeGridGroups.Static.Mechanical.Groups;
+        foreach (MyGroups<MyCubeGrid, MyGridMechanicalGroupData>.Group group in mechGroups)
         {
-            HashSet<long> ProcessedGridIds = new HashSet<long>();
-            Dictionary<long, List<MyCubeGrid>> grids = new Dictionary<long, List<MyCubeGrid>>();
-            
-            // Get grid groups, if any. (If a grid has no connections to another grid, it will not be in a group)
-            HashSetReader<MyGroups<MyCubeGrid, MyGridMechanicalGroupData>.Group> mechGroups = MyCubeGridGroups.Static.Mechanical.Groups;
-            foreach (MyGroups<MyCubeGrid, MyGridMechanicalGroupData>.Group group in mechGroups)
+            List<MyCubeGrid> connectedGrids = [];
+            foreach (MyGroups<MyCubeGrid, MyGridMechanicalGroupData>.Node grid in group.Nodes)
             {
-                List<MyCubeGrid> connectedGrids = new List<MyCubeGrid>();
-                foreach (MyGroups<MyCubeGrid, MyGridMechanicalGroupData>.Node grid in group.Nodes)
-                {
-                    if (grid?.NodeData.Physics == null) continue;
-                    if (grid.NodeData.MarkedForClose) continue;
+                if (grid?.NodeData.Physics == null) continue;
+                if (grid.NodeData.MarkedForClose) continue;
                     
-                    connectedGrids.Add(grid.NodeData);
-                    ProcessedGridIds.Add(grid.NodeData.EntityId);
-                }
-
-                if (connectedGrids.Count == 0)
-                    continue;
-
-                MyCubeGrid biggy = connectedGrids.OrderByDescending(x => x.BlocksCount).First();
-                grids.Add(biggy.EntityId, connectedGrids);
-            }
-            
-            // Get all grids and sort out grid groups
-            foreach (MyCubeGrid grid in MyEntities.GetEntities().OfType<MyCubeGrid>())
-            {
-                if (grid.Physics == null) continue;
-                if (ProcessedGridIds.Contains(grid.EntityId)) continue;
-                grids.Add(grid.EntityId, new List<MyCubeGrid>{grid});
+                connectedGrids.Add(grid.NodeData);
+                processedGridIds.Add(grid.NodeData.EntityId);
             }
 
-            return grids;
+            if (connectedGrids.Count == 0)
+                continue;
+
+            MyCubeGrid biggy = connectedGrids.OrderByDescending(x => x.BlocksCount).First();
+            grids.Add(biggy.EntityId, connectedGrids);
         }
+            
+        // Get all grids and sort out grid groups
+        foreach (MyCubeGrid grid in MyEntities.GetEntities().OfType<MyCubeGrid>())
+        {
+            if (grid.Physics == null) continue;
+            if (processedGridIds.Contains(grid.EntityId)) continue;
+            grids.Add(grid.EntityId, [grid]);
+        }
+
+        return grids;
     }
 }

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
@@ -9,12 +8,9 @@ using NLog;
 using Torch;
 using Torch.API;
 using Torch.API.Managers;
-using Torch.Server.ViewModels.Entities;
 using Torch.Commands;
 using Torch.Server;
 using Torch.Views;
-using Sandbox.Game.World;
-using Sandbox.Game.Entities;
 
 namespace Essentials
 {
@@ -77,9 +73,6 @@ namespace Essentials
                     _nextRun = DateTime.Now.Date + _interval;
                     if (_nextRun < DateTime.Now) _nextRun += TimeSpan.FromDays(1);
                 }
-
-
-
             }
         }
 
@@ -88,7 +81,6 @@ namespace Essentials
         {
             get => _triggerRatio;
             set => SetValue(ref _triggerRatio, Math.Min(Math.Max(value, 0), 1));
-
         }
         
         [Display(Order = 4, Name = "Trigger Count", Description = "Only use with GridCount or PlayerCount Trigger")]
@@ -96,7 +88,6 @@ namespace Essentials
         {
             get => _triggerCount;
             set => SetValue(ref _triggerCount, Math.Max(0, value));
-
         }
 
         [Display(Name = "Day of week", GroupName = "Schedule", Description = "Combined with Scheduled Time, will run the command on the given day of the week at the set time.")]
@@ -133,7 +124,6 @@ namespace Essentials
                     return;
             }
 
-
             if (Steps.Count <= 0)
                 return;
 
@@ -150,8 +140,6 @@ namespace Essentials
                     ? DateTime.Now.Date + _interval + TimeSpan.FromDays(1)
                     : _nextRun = DateTime.Now + _interval;
         }
-
-
 
         public class CommandStep : ViewModel
         {
@@ -181,10 +169,10 @@ namespace Essentials
                     return;
 
                 EssentialsPlugin.Instance.Torch.Invoke(() =>
-                                                       {
-                                                           var manager = EssentialsPlugin.Instance.Torch.CurrentSession.Managers.GetManager<CommandManager>();
-                                                           manager?.HandleCommandFromServer(Command);
-                                                       });
+                   {
+                       var manager = EssentialsPlugin.Instance.Torch.CurrentSession.Managers.GetManager<CommandManager>();
+                       manager?.HandleCommandFromServer(Command);
+                   });
             }
 
             public override string ToString()
