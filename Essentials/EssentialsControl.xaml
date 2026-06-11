@@ -39,6 +39,16 @@
                 <x:Type TypeName="local:ConditionType"/>
             </ObjectDataProvider.MethodParameters>
         </ObjectDataProvider>
+        <ObjectDataProvider x:Key="CleanupActionValues" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="local:CleanupAction"/>
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
+        <ObjectDataProvider x:Key="CleanupConditionTypeValues" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="local:CleanupConditionType"/>
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
     </UserControl.Resources>
 
     <Grid>
@@ -192,7 +202,8 @@
                                               AutoGenerateColumns="False"
                                               CanUserAddRows="False"
                                               CanUserDeleteRows="False"
-                                              MinHeight="120">
+                                              MinHeight="120"
+                                              PreviewKeyDown="StepsGrid_PreviewKeyDown">
                                         <DataGrid.Columns>
                                             <DataGridTemplateColumn Header="" Width="30" CanUserResize="False" CanUserSort="False">
                                                 <DataGridTemplateColumn.CellTemplate>
@@ -220,6 +231,11 @@
                                             </DataGridTemplateColumn>
                                         </DataGrid.Columns>
                                     </DataGrid>
+                                    <Border DockPanel.Dock="Bottom" CornerRadius="5" Background="#FFE8E8E8" Padding="8" Margin="5,8,5,2">
+                                        <TextBlock TextWrapping="Wrap" Foreground="#FF333333" FontSize="11">
+                                            Use the ▲ ▼ buttons on each row or press the Up/Down arrow keys on your keyboard to reorder steps.
+                                        </TextBlock>
+                                    </Border>
                                 </DockPanel>
                             </GroupBox>
                         </StackPanel>
@@ -313,6 +329,7 @@
                                                 </DataGridTemplateColumn.CellTemplate>
                                             </DataGridTemplateColumn>
                                             <DataGridTextColumn Header="Value" Binding="{Binding Value, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                                            <DataGridTextColumn Header="Delay (HH:MM:SS)" Binding="{Binding Delay, UpdateSourceTrigger=LostFocus}" Width="130"/>
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </DockPanel>
@@ -344,9 +361,275 @@
                                     </DataGrid>
                                 </DockPanel>
                             </GroupBox>
+
+                            <Border CornerRadius="5" Background="#FFE8E8E8" Padding="8" Margin="5,8,5,2">
+                                <TextBlock TextWrapping="Wrap" Foreground="#FF333333" FontSize="11">
+                                    To run this preset, type !admin runpreset followed by the preset name in the server console or in-game chat. For example: !admin runpreset "My Preset". You can also use this command inside Auto Command steps to run presets on a schedule.
+                                </TextBlock>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </Grid>
+            </TabItem>
+
+            <!-- TAB 6: Cleanup Presets -->
+            <TabItem Header="Cleanup Presets">
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Left: List -->
+                    <DockPanel Grid.Column="0" Margin="0,0,5,0">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
+                            <Button Content="+ Add" Click="AddCleanupPreset_OnClick" Margin="5" Padding="10,3"/>
+                            <Button Content="- Remove" Click="RemoveCleanupPreset_OnClick" Margin="5" Padding="10,3"/>
+                        </StackPanel>
+                        <ListBox x:Name="CleanupPresetsList"
+                                 ItemsSource="{Binding CleanupPresets}"
+                                 DisplayMemberPath="Name"/>
+                    </DockPanel>
+
+                    <!-- Right: Detail -->
+                    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
+                                  DataContext="{Binding SelectedItem, ElementName=CleanupPresetsList}">
+                        <StackPanel>
+                            <GroupBox Header="Preset Settings">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="110"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Preset Name" Margin="5" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Margin="5"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Action" Margin="5" VerticalAlignment="Center"/>
+                                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Source={StaticResource CleanupActionValues}}" SelectedItem="{Binding Action}" Margin="5"/>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Apply To All" Margin="5" VerticalAlignment="Center"/>
+                                    <CheckBox Grid.Row="2" Grid.Column="1" IsChecked="{Binding ApplyToAll}" Margin="5" VerticalAlignment="Center"/>
+                                </Grid>
+                            </GroupBox>
+
+                            <GroupBox Header="Targets">
+                                <GroupBox.Style>
+                                    <Style TargetType="GroupBox">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ApplyToAll}" Value="True">
+                                                <Setter Property="IsEnabled" Value="False"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </GroupBox.Style>
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
+                                        <Button Content="+ Add Target" Click="AddCleanupTarget_OnClick" Margin="5" Padding="10,3"/>
+                                        <Button Content="- Remove Target" Click="RemoveCleanupTarget_OnClick" Margin="5" Padding="10,3"/>
+                                    </StackPanel>
+                                    <DataGrid x:Name="CleanupTargetsGrid"
+                                              ItemsSource="{Binding Targets}"
+                                              AutoGenerateColumns="False"
+                                              CanUserAddRows="False"
+                                              CanUserDeleteRows="False"
+                                              MinHeight="100">
+                                        <DataGrid.Columns>
+                                            <DataGridTemplateColumn Header="Condition" Width="200">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <ComboBox ItemsSource="{Binding Source={StaticResource CleanupConditionTypeValues}}"
+                                                                  SelectedItem="{Binding Condition, UpdateSourceTrigger=PropertyChanged}"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTextColumn Header="Parameter" Binding="{Binding Parameter, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                                            <DataGridTextColumn Header="Delay (HH:MM:SS)" Binding="{Binding Delay, UpdateSourceTrigger=LostFocus}" Width="130"/>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </DockPanel>
+                            </GroupBox>
+
+                            <GroupBox Header="Conditions">
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
+                                        <Button Content="+ Add Condition" Click="AddCleanupCondition_OnClick" Margin="5" Padding="10,3"/>
+                                        <Button Content="- Remove Condition" Click="RemoveCleanupCondition_OnClick" Margin="5" Padding="10,3"/>
+                                    </StackPanel>
+                                    <DataGrid x:Name="CleanupConditionsGrid"
+                                              ItemsSource="{Binding Conditions}"
+                                              AutoGenerateColumns="False"
+                                              CanUserAddRows="False"
+                                              CanUserDeleteRows="False"
+                                              MinHeight="100">
+                                        <DataGrid.Columns>
+                                            <DataGridTemplateColumn Header="Condition" Width="200">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <ComboBox ItemsSource="{Binding Source={StaticResource CleanupConditionTypeValues}}"
+                                                                  SelectedItem="{Binding Condition, UpdateSourceTrigger=PropertyChanged}"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTextColumn Header="Parameter" Binding="{Binding Parameter, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </DockPanel>
+                            </GroupBox>
+
+                            <Border CornerRadius="5" Background="#FFE8E8E8" Padding="8" Margin="5,8,5,2">
+                                <TextBlock TextWrapping="Wrap" Foreground="#FF333333" FontSize="11">
+                                    To run this preset, type !admin runcleanup followed by the preset name in the server console or in-game chat. For example: !admin runcleanup "Dead Grids". You can also use this command inside Auto Command steps to run cleanup on a schedule.
+                                </TextBlock>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+
+            <!-- TAB 7: Instructions -->
+            <TabItem Header="Instructions">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10">
+                        <TabControl>
+
+                            <TabItem Header="Getting Started">
+                                <StackPanel Margin="15">
+                                    <TextBlock FontSize="16" FontWeight="Bold" Text="Welcome to Essentials" Margin="0,0,0,10"/>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                                        This plugin adds helpful tools for managing your Space Engineers server. Use the tabs above to configure different features. Changes are saved automatically as you make them, but you can also click the Save Config button at the bottom for a manual save.
+                                    </TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                                        Most features work by creating presets in the plugin settings, then running them using chat commands in-game or from the server console. You can also schedule them to run automatically using the Auto Commands tab.
+                                    </TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Quick Reference - Chat Commands:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">!admin runpreset &lt;name&gt; - Run a Block Preset</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">!admin runcleanup &lt;name&gt; - Run a Cleanup Preset</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">!admin runauto &lt;name&gt; - Run an Auto Command</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">!admin cancelauto &lt;name&gt; - Cancel a running Auto Command</TextBlock>
+                                </StackPanel>
+                            </TabItem>
+
+                            <TabItem Header="MOTD">
+                                <StackPanel Margin="15">
+                                    <TextBlock FontSize="16" FontWeight="Bold" Text="Message of the Day" Margin="0,0,0,10"/>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                                        The MOTD is a message that appears to players when they connect to your server. You can use it to welcome players, share rules, or provide important information.
+                                    </TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Fields:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">MOTD - The main message shown to all players when they join.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">New User MOTD - A special message shown only to players joining for the first time. Great for tutorials or welcome messages.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">MOTD URL - A web address that opens in the Steam overlay when players connect. Useful for linking to your Discord, rules page, or website.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">URL for new users only - When checked, the URL only opens for first-time players.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,10,0,4">
+                                        Tip: You can use %player% in the MOTD text and it will be replaced with the player's name.
+                                    </TextBlock>
+                                </StackPanel>
+                            </TabItem>
+
+                            <TabItem Header="General Settings">
+                                <StackPanel Margin="15">
+                                    <TextBlock FontSize="16" FontWeight="Bold" Text="General Settings" Margin="0,0,0,10"/>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Options:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Stop entities on start - Freezes all ships and stations when the server starts up. Helps prevent damage from physics glitches during loading.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Grid list show position - Shows players the coordinates of their grids when they use the grid list command.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Grid list GPS marker - Creates GPS markers for each grid a player owns, making them easy to find.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Backpack limit - Controls how many backpacks (dropped inventories) each player can have. Set to -1 for unlimited. Empty backpacks are automatically cleaned up after 30 seconds.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Cut game tags - Removes mod and block limit information from the server listing. Enable this if players get "error downloading session settings" when trying to join.</TextBlock>
+                                </StackPanel>
+                            </TabItem>
+
+                            <TabItem Header="Auto Commands">
+                                <StackPanel Margin="15">
+                                    <TextBlock FontSize="16" FontWeight="Bold" Text="Auto Commands" Margin="0,0,0,10"/>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                                        Auto Commands let you schedule any server command to run automatically. You can set them to run on a timer, at a specific time of day, or when certain conditions are met (like low sim speed or a specific number of players).
+                                    </TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">How to set up an Auto Command:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">1. Click "+ Add" to create a new command.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">2. Give it a name so you can identify it later.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">3. Set the Trigger to control when it runs (Timed = repeating interval, Scheduled = specific time of day, SimSpeed = when sim speed drops, etc.).</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">4. Set the Interval (format: HH:MM:SS). For Timed triggers, this is how often it repeats. For Scheduled triggers, this is the time of day.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">5. Add steps - each step is a command that runs in order. Set a Delay between steps if needed.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Reordering Steps:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Use the ▲ ▼ buttons on each row, or select a step and press the Up/Down arrow keys on your keyboard.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Example - Restart Warning:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Name: "Restart Warning", Trigger: Timed, Interval: 04:00:00</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Step 1: !say Server restarting in 5 minutes (Delay: 00:04:00)</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Step 2: !say Server restarting in 1 minute (Delay: 00:01:00)</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Step 3: !stop (Delay: 00:00:00)</TextBlock>
+                                </StackPanel>
+                            </TabItem>
+
+                            <TabItem Header="Info Commands">
+                                <StackPanel Margin="15">
+                                    <TextBlock FontSize="16" FontWeight="Bold" Text="Info Commands" Margin="0,0,0,10"/>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                                        Info Commands let you create custom chat commands that display information to players. When a player types the command in chat, they receive a response.
+                                    </TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Fields:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Command - What players type in chat (e.g., !rules, !discord).</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Chat Response - A short message sent back in chat.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Dialog Response - A longer message shown in a popup dialog box.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">URL - A web address that opens in the player's Steam overlay.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,10,0,4">
+                                        Tip: You can fill in multiple response types. For example, a chat response saying "Check the popup!" along with a detailed dialog response.
+                                    </TextBlock>
+                                </StackPanel>
+                            </TabItem>
+
+                            <TabItem Header="Block Presets">
+                                <StackPanel Margin="15">
+                                    <TextBlock FontSize="16" FontWeight="Bold" Text="Block Presets" Margin="0,0,0,10"/>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                                        Block Presets let you control specific block types across your server. You can turn blocks on, turn them off, or remove them entirely. This is useful for managing performance, enforcing rules, or preparing for events.
+                                    </TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">How to set up a Block Preset:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">1. Click "+ Add" to create a new preset and give it a name.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">2. Choose an Action: TurnOn, TurnOff, or Remove.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">3. Add Items - each item targets a specific block by Type or Subtype name.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">4. Add Conditions (optional) - narrow down which grids are affected (e.g., only grids with no power, only grids owned by nobody).</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">5. Set a Delay on each item if you want a pause between processing each block type.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Running a preset:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Type !admin runpreset followed by the preset name. Example: !admin runpreset "Disable Drills"</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">You can also add this command as a step inside an Auto Command to run it on a schedule.</TextBlock>
+                                </StackPanel>
+                            </TabItem>
+
+                            <TabItem Header="Cleanup Presets">
+                                <StackPanel Margin="15">
+                                    <TextBlock FontSize="16" FontWeight="Bold" Text="Cleanup Presets" Margin="0,0,0,10"/>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                                        Cleanup Presets help you automatically remove unwanted grids from your server. You can target grids by name (using pattern matching), owner, power status, distance from players, and many other conditions.
+                                    </TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">How it works:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Each preset has two sections: Targets and Conditions.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,8">Targets define what you are looking for (e.g., grids named "Container MK" or grids owned by nobody). Each target generates a separate cleanup command.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,8">Conditions are shared filters that apply to every target (e.g., only grids with no power, only grids far from players).</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Apply To All:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,8">Check this box if you do not need specific targets. When checked, the cleanup runs a single command using only the conditions. This is useful for broad cleanup rules like "delete all grids owned by nobody that are far from players".</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Name patterns (Regex):</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">When using the Name condition, the parameter is a pattern (called regex). Some useful examples:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="20,0,0,3">Container MK - Matches any grid with "Container MK" in the name.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="20,0,0,3">^Static Grid [0-9]+$ - Matches default grid names like "Static Grid 1234".</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="20,0,0,3">^Large Grid [0-9]+$ - Matches default names like "Large Grid 5678".</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="20,0,0,3">^Small Grid [0-9]+$ - Matches default names like "Small Grid 9012".</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Running a preset:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Type !admin runcleanup followed by the preset name. Example: !admin runcleanup "Dead Grids"</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">You can also add this command as a step inside an Auto Command to run cleanup on a schedule.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Delete Floating Objects:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Set the Action to "DeleteFloatingObjects" to remove loose items floating in space (dropped items, debris). No targets or conditions are needed for this action.</TextBlock>
+                                </StackPanel>
+                            </TabItem>
+
+                        </TabControl>
+                    </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
         </TabControl>

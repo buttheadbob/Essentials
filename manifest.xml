@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <PluginManifest xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <Name>Essentials-SI</Name>
+  <Name>Essentials</Name>
   <Guid>c7fdd6ab-4cda-4544-a201-f73efa3d46c0</Guid>
   <Repository></Repository>
   <Version>SI</Version>

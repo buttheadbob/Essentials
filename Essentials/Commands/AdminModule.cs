@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using System.Timers;
 using Sandbox;
 using Sandbox.Engine.Multiplayer;
@@ -123,19 +124,72 @@ public class AdminModule : CommandModule
             _ => "off"
         };
 
+        var items = preset.Items.ToList();
         var cmdMan = EssentialsPlugin.Instance.CommandManager;
-        var count = 0;
-        foreach (var item in preset.Items)
-        {
-            if (string.IsNullOrWhiteSpace(item.Value))
-                continue;
+        Context.Respond($"Running block preset '{name}' ({items.Count} items)...");
 
-            var command = preset.GetCommand(action, item);
-            cmdMan?.HandleCommandFromServer(command);
-            count++;
+        Task.Run(() =>
+        {
+            foreach (var item in items)
+            {
+                if (string.IsNullOrWhiteSpace(item.Value))
+                    continue;
+
+                var command = preset.GetCommand(action, item);
+                EssentialsPlugin.Instance.Torch.Invoke(() => cmdMan?.HandleCommandFromServer(command));
+                System.Threading.Thread.Sleep(item.DelaySpan);
+            }
+        });
+    }
+
+    [Command("runcleanup", "Runs the cleanup preset with the given preset name immediately")]
+    [Permission(MyPromoteLevel.Admin)]
+    public void RunCleanup(string name)
+    {
+        var preset = EssentialsPlugin.Instance.Config.CleanupPresets.FirstOrDefault(c => c.Name.Equals(name));
+        if (preset == null)
+        {
+            Context.Respond($"Couldn't find a cleanup preset with the name '{name}'");
+            return;
         }
 
-        Context.Respond($"Ran block preset '{name}' ({count} commands).");
+        if (preset.Action != CleanupAction.DeleteFloatingObjects
+            && !preset.ApplyToAll && preset.Targets.Count == 0)
+        {
+            Context.Respond($"Cleanup preset '{name}' has no targets configured and Apply To All is not checked.");
+            return;
+        }
+
+        if (preset.Action != CleanupAction.DeleteFloatingObjects
+            && preset.ApplyToAll && preset.Conditions.Count == 0)
+        {
+            Context.Respond($"Cleanup preset '{name}' has Apply To All checked but no conditions configured.");
+            return;
+        }
+
+        var cmdMan = EssentialsPlugin.Instance.CommandManager;
+
+        if (preset.ApplyToAll || preset.Action == CleanupAction.DeleteFloatingObjects)
+        {
+            var commands = preset.GetCommands();
+            foreach (var command in commands)
+                cmdMan?.HandleCommandFromServer(command);
+            Context.Respond($"Ran cleanup preset '{name}' ({commands.Count} commands).");
+        }
+        else
+        {
+            var targets = preset.Targets.ToList();
+            Context.Respond($"Running cleanup preset '{name}' ({targets.Count} targets)...");
+            Task.Run(() =>
+            {
+                foreach (var target in targets)
+                {
+                    var command = preset.BuildCommand(target);
+                    EssentialsPlugin.Instance.Torch.Invoke(() => cmdMan?.HandleCommandFromServer(command));
+                    System.Threading.Thread.Sleep(target.DelaySpan);
+                }
+            });
+        }
     }
 
     [Command("cancelauto", "Cancels the auto command with the given commandName immediately")]

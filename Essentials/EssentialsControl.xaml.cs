@@ -1,6 +1,7 @@
 ﻿using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Essentials
 {
@@ -22,7 +23,9 @@ namespace Essentials
 
         private void AddAutoCommand_OnClick(object sender, RoutedEventArgs e)
         {
-            Plugin.Config.AutoCommands.Add(new AutoCommand());
+            var command = new AutoCommand { Name = "New Command" };
+            Plugin.Config.AutoCommands.Add(command);
+            AutoCommandsList.SelectedItem = command;
         }
 
         private void RemoveAutoCommand_OnClick(object sender, RoutedEventArgs e)
@@ -68,6 +71,34 @@ namespace Essentials
             }
         }
 
+        private void StepsGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (AutoCommandsList.SelectedItem is not AutoCommand cmd
+                || StepsGrid.SelectedItem is not AutoCommand.CommandStep step)
+                return;
+
+            int index = cmd.Steps.IndexOf(step);
+            int newIndex = -1;
+
+            if (e.Key == Key.Up && index > 0)
+                newIndex = index - 1;
+            else if (e.Key == Key.Down && index < cmd.Steps.Count - 1)
+                newIndex = index + 1;
+
+            if (newIndex < 0)
+                return;
+
+            cmd.Steps.Move(index, newIndex);
+            StepsGrid.SelectedItem = step;
+            StepsGrid.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, new System.Action(() =>
+            {
+                StepsGrid.UpdateLayout();
+                var row = (DataGridRow)StepsGrid.ItemContainerGenerator.ContainerFromItem(step);
+                row?.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+            }));
+            e.Handled = true;
+        }
+
         private void AddInfoCommand_OnClick(object sender, RoutedEventArgs e)
         {
             Plugin.Config.InfoCommands.Add(new InfoCommand());
@@ -81,7 +112,9 @@ namespace Essentials
 
         private void AddBlockList_OnClick(object sender, RoutedEventArgs e)
         {
-            Plugin.Config.BlockLists.Add(new BlockList());
+            var preset = new BlockList { Name = "New Preset" };
+            Plugin.Config.BlockLists.Add(preset);
+            BlockListsList.SelectedItem = preset;
         }
 
         private void RemoveBlockList_OnClick(object sender, RoutedEventArgs e)
@@ -112,6 +145,43 @@ namespace Essentials
         {
             if (BlockListsList.SelectedItem is BlockList list && BlockListConditionsGrid.SelectedItem is BlockListCondition condition)
                 list.Conditions.Remove(condition);
+        }
+
+        private void AddCleanupPreset_OnClick(object sender, RoutedEventArgs e)
+        {
+            var preset = new CleanupPreset { Name = "New Preset" };
+            Plugin.Config.CleanupPresets.Add(preset);
+            CleanupPresetsList.SelectedItem = preset;
+        }
+
+        private void RemoveCleanupPreset_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (CleanupPresetsList.SelectedItem is CleanupPreset selected)
+                Plugin.Config.CleanupPresets.Remove(selected);
+        }
+
+        private void AddCleanupTarget_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (CleanupPresetsList.SelectedItem is CleanupPreset selected)
+                selected.Targets.Add(new CleanupTarget());
+        }
+
+        private void RemoveCleanupTarget_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (CleanupPresetsList.SelectedItem is CleanupPreset preset && CleanupTargetsGrid.SelectedItem is CleanupTarget target)
+                preset.Targets.Remove(target);
+        }
+
+        private void AddCleanupCondition_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (CleanupPresetsList.SelectedItem is CleanupPreset selected)
+                selected.Conditions.Add(new CleanupCondition());
+        }
+
+        private void RemoveCleanupCondition_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (CleanupPresetsList.SelectedItem is CleanupPreset preset && CleanupConditionsGrid.SelectedItem is CleanupCondition condition)
+                preset.Conditions.Remove(condition);
         }
     }
 }

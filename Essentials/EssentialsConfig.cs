@@ -26,6 +26,7 @@ public class EssentialsConfig : ViewModel
         WatchCollection(AutoCommands);
         WatchCollection(InfoCommands);
         WatchCollection(BlockLists);
+        WatchCollection(CleanupPresets);
     }
 
     public ObservableCollection<AutoCommand> AutoCommands { get; } = [];
@@ -33,6 +34,8 @@ public class EssentialsConfig : ViewModel
     public ObservableCollection<InfoCommand> InfoCommands { get; } = [];
 
     public ObservableCollection<BlockList> BlockLists { get; } = [];
+
+    public ObservableCollection<CleanupPreset> CleanupPresets { get; } = [];
 
     public string Motd { get; set => SetValue(ref field, value); } = "";
 

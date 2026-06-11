@@ -1,4 +1,5 @@
-﻿using System.Collections.ObjectModel;
+﻿using System;
+using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Text;
@@ -62,6 +63,14 @@ public class BlockListItem : ViewModel
     public SelectorType Selector { get; set => SetValue(ref field, value); }
 
     public string Value { get; set => SetValue(ref field, value); } = "";
+
+    internal TimeSpan DelaySpan;
+
+    public string Delay
+    {
+        get => DelaySpan.ToString();
+        set => SetValue(ref DelaySpan, TimeSpan.Parse(value));
+    }
 
     public override string ToString() => $"{Selector}: {Value}";
 }
