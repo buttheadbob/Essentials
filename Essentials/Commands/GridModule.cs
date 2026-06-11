@@ -155,7 +155,7 @@ public class GridModule : CommandModule
             if (grid == null || grid.Projector != null)
                 continue;
 
-            if (grid.BigOwners.Contains(id))
+            if (Utils.Ownership.GetAllOwnerIds(grid).Contains(id))
             {
 
                 sb.AppendLine($"{grid.DisplayName} - {grid.GridSizeEnum} - {grid.BlocksCount} blocks - Position {(EssentialsPlugin.Instance.Config.UtilityShowPosition ? grid.PositionComp.GetPosition().ToString() : "Unknown")}");

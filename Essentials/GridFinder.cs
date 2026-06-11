@@ -2,6 +2,7 @@
 using Sandbox.Game.Entities;
 using System.Collections.Generic;
 using System.Linq;
+using Sandbox.Game.World;
 using VRage.Collections;
 using VRage.Game.ModAPI;
 using VRage.Groups;
@@ -16,7 +17,7 @@ public class GridFinder
         Dictionary<long, List<MyCubeGrid>> grids = GetAllGrids();
         KeyValuePair<long, List<MyCubeGrid>> kvp = grids.FirstOrDefault(x => x.Value.Any(y => y.DisplayName.Equals(gridNameOrId, StringComparison.OrdinalIgnoreCase) || y.EntityId.ToString() == gridNameOrId));
 
-        return (kvp.Key, kvp.Value);
+        return (kvp.Key, kvp.Value); 
     }
 
     public static (long, List<MyCubeGrid>) FindLookAtGridGroupMechanical(IMyCharacter controlledEntity) 

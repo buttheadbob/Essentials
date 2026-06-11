@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Text;
+using Sandbox.Game.World;
 using Torch;
 
 namespace Essentials;

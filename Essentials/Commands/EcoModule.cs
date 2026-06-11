@@ -241,7 +241,7 @@ public class EcoModule : CommandModule {
             identitiesToCheck = identitiesToCheck.Where(identityId => players.IsPlayerOnline(identityId));
 
         if (excludeNpcs)
-            identitiesToCheck = identitiesToCheck.Where(identityId => !players.IdentityIsNpc(identityId));
+            identitiesToCheck = identitiesToCheck.Where(identityId => !Utils.Ownership.IsNpcIdentity(identityId));
 
         foundIdentities = identitiesToCheck.ToList();
 

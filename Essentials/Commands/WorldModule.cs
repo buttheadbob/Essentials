@@ -152,7 +152,7 @@ public class WorldModule : CommandModule
             sb.AppendLine($"{faction.Tag} - {memberCount} players in this faction");
             foreach (var player in faction.Members)
             {
-                if (!MySession.Static!.Players!.HasIdentity(player.Key) && !MySession.Static.Players.IdentityIsNpc(player.Key)
+                if (!MySession.Static!.Players!.HasIdentity(player.Key) && !Utils.Ownership.IsNpcIdentity(player.Key)
                     || string.IsNullOrEmpty(MySession.Static?.Players?.TryGetIdentity(player.Value.PlayerId).DisplayName)) 
                     continue; //This is needed to filter out players with no id.  <<--- Why is this needed, what player has no id?
                 sb.AppendLine($"{MySession.Static?.Players?.TryGetIdentity(player.Value.PlayerId).DisplayName}");
@@ -184,7 +184,7 @@ public class WorldModule : CommandModule
             //O(2n)
             foreach (var member in faction.Value.Members)
             {
-                if (!MySession.Static.Players.HasIdentity(member.Key) && !MySession.Static.Players.IdentityIsNpc(member.Key))
+                if (!MySession.Static.Players.HasIdentity(member.Key) && !Utils.Ownership.IsNpcIdentity(member.Key))
                     continue;
 
                 validmembers++;
@@ -257,7 +257,7 @@ public class WorldModule : CommandModule
         foreach (var id in ids)
         {
             if (id == 0) continue;
-            foreach (var grid in grids.Where(grid => grid.BigOwners.Contains(id)))
+            foreach (var grid in grids.Where(grid => Utils.Ownership.GetAllOwnerIds(grid).Contains(id)))
             {
                 if (grid.BigOwners.Count > 1)
                 {
@@ -287,7 +287,7 @@ public class WorldModule : CommandModule
             var grid = entity as MyCubeGrid;
             if (grid == null)
                 continue;
-            var owner = grid.BigOwners.FirstOrDefault();
+            var owner = Utils.Ownership.GetOwner(grid);
             var share = owner == 0 ? MyOwnershipShareModeEnum.All : MyOwnershipShareModeEnum.Faction;
             foreach (var block in grid.GetFatBlocks())
             {
@@ -321,7 +321,7 @@ public class WorldModule : CommandModule
             var grid = entity as MyCubeGrid;
             if (grid == null)
                 continue;
-            validIdentities.UnionWith(grid.SmallOwners);
+            validIdentities.UnionWith(Utils.Ownership.GetAllOwnerIds(grid));
         }
 
         foreach (var online in MySession.Static.Players.GetOnlinePlayers())
@@ -335,7 +335,7 @@ public class WorldModule : CommandModule
         //clean identities that don't own any blocks, or don't have a steam ID for whatever reason
         foreach (var identity in MySession.Static.Players.GetAllIdentities().ToList())
         {
-            if (MySession.Static.Players.IdentityIsNpc(identity.IdentityId)  || string.IsNullOrEmpty(identity.DisplayName))
+            if (Utils.Ownership.IsNpcIdentity(identity.IdentityId)  || string.IsNullOrEmpty(identity.DisplayName))
             {
                 validIdentities.Add(identity.IdentityId);
                 continue;
@@ -466,7 +466,7 @@ public class WorldModule : CommandModule
             var grid = entity as MyCubeGrid;
             if (grid == null)
                 continue;
-            validIdentities.UnionWith(grid.SmallOwners);
+            validIdentities.UnionWith(Utils.Ownership.GetAllOwnerIds(grid));
         }
 
         //find online identities
@@ -477,7 +477,7 @@ public class WorldModule : CommandModule
 
         foreach (var identity in MySession.Static.Players.GetAllIdentities().ToList())
         {
-            if (MySession.Static.Players.IdentityIsNpc(identity.IdentityId))
+            if (Utils.Ownership.IsNpcIdentity(identity.IdentityId))
             {
                 validIdentities.Add(identity.IdentityId);
             }

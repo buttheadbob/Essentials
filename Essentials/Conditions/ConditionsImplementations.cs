@@ -71,7 +71,9 @@ namespace Essentials.Commands
 
             if (grid.IsStatic && grid.GridSizeEnum == VRage.Game.MyCubeSize.Large)
             {
-                var faction = MyAPIGateway.Session.Factions.TryGetPlayerFaction(grid.BigOwners.FirstOrDefault());
+                var ownerId = Utils.Ownership.GetOwner(grid);
+                if (ownerId == 0) return false;
+                var faction = MyAPIGateway.Session.Factions.TryGetPlayerFaction(ownerId);
                 if (faction != null && faction.Tag == "NPC")
                     return true;
             }
@@ -197,19 +199,19 @@ namespace Essentials.Commands
         [Condition("ownedby", helpText: "Finds grids owned by the given player. Can specify player name, IdentityId, 'nobody', or 'pirates'.")]
         public static bool OwnedBy(MyCubeGrid grid, string str)
         {
+            var allOwners = Utils.Ownership.GetAllOwnerIds(grid);
             long identityId;
 
             if (string.Compare(str, "nobody", StringComparison.InvariantCultureIgnoreCase) == 0)
             {
-                return grid.BigOwners.Count == 0;
+                return allOwners.Count == 0;
             }
 
             if (string.Compare(str, "npc", StringComparison.Ordinal) == 0)
             {
-                return grid.BigOwners.Count > 0 &&
-                       MySession.Static.Factions.IsNpcFaction(grid.BigOwners.FirstOrDefault());
+                var ownerId = Utils.Ownership.GetOwner(grid);
+                return ownerId != 0 && Utils.Ownership.IsNpcIdentity(ownerId);
             }
-            
 
             if (string.Compare(str, "pirates", StringComparison.InvariantCultureIgnoreCase) == 0)
             {
@@ -217,10 +219,13 @@ namespace Essentials.Commands
                 var pirateFaction = MySession.Static.Factions.GetPlayerFaction(identityId);
                 if (pirateFaction != null && pirateFaction.Members.Count > 1)
                 {
-                    return grid.BigOwners.Count > 0 &&
-                           pirateFaction.Members.ContainsKey(grid.BigOwners.FirstOrDefault());
+                    foreach (var owner in allOwners)
+                    {
+                        if (pirateFaction.Members.ContainsKey(owner))
+                            return true;
+                    }
                 }
-
+                return false;
             }
             else
             {
@@ -229,17 +234,14 @@ namespace Essentials.Commands
                 {
                     if (long.TryParse(str, out long NPCId))
                     {
-                        if (MySession.Static.Players.IdentityIsNpc(NPCId))
-                        {
-                            return grid.BigOwners.Contains(NPCId);
-                        }
+                        return allOwners.Contains(NPCId);
                     }
                     return false;
                 }
                 identityId = player.IdentityId;
             }
 
-            return grid.BigOwners.Contains(identityId);
+            return allOwners.Contains(identityId);
         }
         
 
