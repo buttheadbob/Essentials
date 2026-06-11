@@ -257,3 +257,7 @@ TorchBinaries
 GameBinaries
 /Build
 AI_RULES.md
+jenkins-grab-se.ps1
+Jenkinsfile
+PluginPush.exe
+release.ps1

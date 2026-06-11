@@ -27,7 +27,7 @@ using Torch.Managers.PatchManager;
 using Torch.Mod;
 using Torch.Mod.Messages;
 using Torch.Session;
-using Torch.Views;
+
 using VRage.Game;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
@@ -60,7 +60,7 @@ namespace Essentials
         private static bool _initilized = false;
 
         /// <inheritdoc />
-        public UserControl GetControl() => _control ?? (_control = new PropertyGrid(){DataContext=Config/*, IsEnabled = false*/});
+        public UserControl GetControl() => _control ??= new EssentialsControl(this);
 
         public void Save()
         {

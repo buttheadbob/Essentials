@@ -98,6 +98,46 @@ public class AdminModule : CommandModule
         command.RunNow();
     }
 
+    [Command("runpreset", "Runs the custom block preset with the given preset name immediately")]
+    [Permission(MyPromoteLevel.Admin)]
+    public void RunPreset(string name)
+    {
+        var preset = EssentialsPlugin.Instance.Config.BlockLists.FirstOrDefault(b => b.Name.Equals(name));
+        if (preset == null)
+        {
+            Context.Respond($"Couldn't find a block preset with the name '{name}'");
+            return;
+        }
+
+        if (preset.Items.Count == 0)
+        {
+            Context.Respond($"Block preset '{name}' has no items configured.");
+            return;
+        }
+
+        var action = preset.Action switch
+        {
+            BlockAction.TurnOn => "on",
+            BlockAction.TurnOff => "off",
+            BlockAction.Remove => "remove",
+            _ => "off"
+        };
+
+        var cmdMan = EssentialsPlugin.Instance.CommandManager;
+        var count = 0;
+        foreach (var item in preset.Items)
+        {
+            if (string.IsNullOrWhiteSpace(item.Value))
+                continue;
+
+            var command = preset.GetCommand(action, item);
+            cmdMan?.HandleCommandFromServer(command);
+            count++;
+        }
+
+        Context.Respond($"Ran block preset '{name}' ({count} commands).");
+    }
+
     [Command("cancelauto", "Cancels the auto command with the given commandName immediately")]
     [Permission(MyPromoteLevel.Admin)]
     public void EndAuto(string commandName)

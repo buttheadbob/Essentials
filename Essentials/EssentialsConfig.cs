@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.IO.Compression;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -11,7 +13,6 @@ using System.Xml.Schema;
 using System.Xml.Serialization;
 using Sandbox.Game.Screens.Helpers;
 using Torch;
-using Torch.Views;
 using VRage;
 using VRage.Game;
 using VRage.ObjectBuilders;
@@ -22,41 +23,33 @@ public class EssentialsConfig : ViewModel
 {
     public EssentialsConfig()
     {
-        AutoCommands.CollectionChanged += (sender, args) => OnPropertyChanged();
-        InfoCommands.CollectionChanged += (sender, args) => OnPropertyChanged();
+        WatchCollection(AutoCommands);
+        WatchCollection(InfoCommands);
+        WatchCollection(BlockLists);
     }
 
-    [Display(EditorType = typeof(EmbeddedCollectionEditor))]
     public ObservableCollection<AutoCommand> AutoCommands { get; } = [];
 
-    [Display(EditorType = typeof(EmbeddedCollectionEditor))]
     public ObservableCollection<InfoCommand> InfoCommands { get; } = [];
 
-    [Display(Name = "Motd", Description = "Message displayed to players upon connection")]
+    public ObservableCollection<BlockList> BlockLists { get; } = [];
+
     public string Motd { get; set => SetValue(ref field, value); } = "";
 
     public string NewUserMotd { get; set => SetValue(ref field, value); } = "";
 
-    [Display(Name = "MotdURL", Description = "Sets a URL to show to players when they connect. Opens in the steam overlay, if enabled.")]
     public string MotdUrl { get; set => SetValue(ref field, value); } = "";
 
-    [Display(Name = "Url for New Users Only", Description = "MOTD URL for new users only")] 
     public bool NewUserMotdUrl { get; set => SetValue(ref field, value); }
 
-    [Display(Name = "Stop entities on start", Description = "Stop all entities in the world when the server starts.")]
     public bool StopShipsOnStart { get; set => SetValue(ref field, value); }
 
-
-    [Display(Name = "Grid list show position", Description = "Show users the position of all grids they own in the grids list command.")]
     public bool UtilityShowPosition { get; set => SetValue(ref field, value); }
 
-    [Display(Name = "Grid list GPS marker", Description = "Show uservers the poition of all grids they own by gps marker")]
     public bool MarkerShowPosition { get; set => SetValue(ref field, value); }
 
-    [Display(Name = "Backpack Limit", Description = "Sets the number of backpacks that can belong to any player. Empty backpacks are deleted after 30 seconds, and backpacks which break the limit are deleted in order spawned. Set -1 for no limit.")]
     public int BackpackLimit { get; set => SetValue(ref field, value); } = 1;
 
-    [Display(Name = "Cut Game Tags", GroupName = "Client Join Tweaks", Order = 8, Description = "Cuts mods and blocks limits from matchmaking server info. Prevents from 'error downloading session settings'.")]
     public bool CutGameTags { get; set => SetValue(ref field, value); }
 
     [XmlIgnore]
@@ -64,8 +57,6 @@ public class EssentialsConfig : ViewModel
 
     private MyObjectBuilder_Toolbar? _defaultToolbar;
 
-    [Display(Visible=false)]
-    //TODO!
     public ToolbarWrapper DefaultToolbar
     {
         get => _defaultToolbar ?? VanillaDefaultToolbar;
@@ -97,9 +88,25 @@ public class EssentialsConfig : ViewModel
         return _defaultToolbar != null;
     }
 
-    /// <summary>
-    /// Allows us to use Keen's serializer without losing previously stored config data
-    /// </summary>
+    private void WatchCollection<T>(ObservableCollection<T> collection) where T : ViewModel
+    {
+        collection.CollectionChanged += (_, e) =>
+        {
+            if (e.NewItems != null)
+                foreach (T item in e.NewItems)
+                    item.PropertyChanged += ItemChanged;
+            if (e.OldItems != null)
+                foreach (T item in e.OldItems)
+                    item.PropertyChanged -= ItemChanged;
+            OnPropertyChanged();
+        };
+
+        foreach (var item in collection)
+            item.PropertyChanged += ItemChanged;
+    }
+
+    private void ItemChanged(object? sender, PropertyChangedEventArgs e) => OnPropertyChanged();
+
     public class ToolbarWrapper : IXmlSerializable
     {
         public MyObjectBuilder_Toolbar? Data { get; set; }

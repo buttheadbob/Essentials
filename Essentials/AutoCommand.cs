@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
@@ -10,7 +11,6 @@ using Torch.API;
 using Torch.API.Managers;
 using Torch.Commands;
 using Torch.Server;
-using Torch.Views;
 
 namespace Essentials
 {
@@ -32,29 +32,24 @@ namespace Essentials
         [XmlIgnore]
         public bool Completed { get; set; }
 
-        [Display(Order = 3, Name = "Trigger", Description ="Choose a trigger for the command")]
         public Trigger CommandTrigger
         {
             get => _trigger;
             set => SetValue(ref _trigger, value);
         }
-        
-        [Display(Order = 6, Name = "Trigger Operator", Description ="Choose a comparer for the command")]
+
         public Gtl Compare
         {
             get => _comparer;
             set => SetValue(ref _comparer, value);
         }
 
-        
-        [Display(Order = 1, Description = "Sets the name of this command. Use this name in conjunction with !admin runauto to trigger the command from ingame or from other auto commands.")]
         public string Name
         {
             get => _name;
             set => SetValue(ref _name, value);
         }
 
-        [Display(Order = 2, Description = "Sets an interval/Time for this command to be repeated. Format is HH:MM:SS.")]
         public string Interval
         {
             get => _interval.ToString();
@@ -67,7 +62,6 @@ namespace Essentials
                     _nextRun = DateTime.Now + _interval;
                 }
 
-
                 if (CommandTrigger == Trigger.Scheduled)
                 {
                     _nextRun = DateTime.Now.Date + _interval;
@@ -76,34 +70,44 @@ namespace Essentials
             }
         }
 
-        [Display(Order = 5, Name = "Trigger Ratio", Description = "Ratio for Sim Speed or Vote Trigger. 0.5 is equivalent to 50%")]
         public float TriggerRatio
         {
             get => _triggerRatio;
             set => SetValue(ref _triggerRatio, Math.Min(Math.Max(value, 0), 1));
         }
-        
-        [Display(Order = 4, Name = "Trigger Count", Description = "Only use with GridCount or PlayerCount Trigger")]
+
         public double TriggerCount
         {
             get => _triggerCount;
             set => SetValue(ref _triggerCount, Math.Max(0, value));
         }
 
-        [Display(Name = "Day of week", GroupName = "Schedule", Description = "Combined with Scheduled Time, will run the command on the given day of the week at the set time.")]
         public DayOfWeek DayOfWeek
         {
             get => _day;
             set => SetValue(ref _day, value);
         }
 
-        [Display(Order = 7, Description = "Sub-command steps that will be iterated through once the Interval or Scheduled time is reached.")]
         public ObservableCollection<CommandStep> Steps { get; } = new ObservableCollection<CommandStep>();
 
         public AutoCommand()
         {
-            Steps.CollectionChanged += (sender, args) => OnPropertyChanged();
+            Steps.CollectionChanged += (_, e) =>
+            {
+                if (e.NewItems != null)
+                    foreach (CommandStep item in e.NewItems)
+                        item.PropertyChanged += StepChanged;
+                if (e.OldItems != null)
+                    foreach (CommandStep item in e.OldItems)
+                        item.PropertyChanged -= StepChanged;
+                OnPropertyChanged();
+            };
+
+            foreach (var step in Steps)
+                step.PropertyChanged += StepChanged;
         }
+
+        private void StepChanged(object? sender, PropertyChangedEventArgs e) => OnPropertyChanged();
 
         public void Update()
         {
@@ -119,7 +123,6 @@ namespace Essentials
                     _nextRun = DateTime.Now + _interval;
                     return;
                 case Trigger.Scheduled when  DayOfWeek != DayOfWeek.All && DateTime.Now.DayOfWeek != (System.DayOfWeek)(int)DayOfWeek:
-                    //adding one day because I can't be bothered to calculate exact interval
                     _nextRun += TimeSpan.FromDays(1);
                     return;
             }
@@ -146,14 +149,12 @@ namespace Essentials
             internal TimeSpan DelaySpan;
             private string _command = null!;
 
-            [Display(Description = "Delay AFTER this step and BEFORE the next step. Format is HH:MM:SS.")]
             public string Delay
             {
                 get => DelaySpan.ToString();
                 set => SetValue(ref DelaySpan, TimeSpan.Parse(value));
             }
 
-            [Display(Description = "Command to be run as the server.")]
             public string Command
             {
                 get => _command;
@@ -183,9 +184,6 @@ namespace Essentials
 
         private CancellationTokenSource? _cTokenSource;
 
-        /// <summary>
-        /// Runs the command and all steps immediately, in a new thread
-        /// </summary>
         internal async void RunNow()
         {
             _cTokenSource = new CancellationTokenSource();
