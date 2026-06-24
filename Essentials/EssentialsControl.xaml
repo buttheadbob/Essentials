@@ -5,8 +5,8 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:Essentials"
              xmlns:sys="clr-namespace:System;assembly=mscorlib"
-             mc:Ignorable="d"
-             d:DesignHeight="700" d:DesignWidth="900">
+             x:Name="Root"
+             mc:Ignorable="d">
 
     <UserControl.Resources>
         <ObjectDataProvider x:Key="TriggerValues" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
@@ -129,7 +129,143 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- TAB 3: Auto Commands -->
+            <!-- TAB 3: Sim Speed -->
+            <TabItem Header="Sim Speed">
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Left: List -->
+                    <DockPanel Grid.Column="0" Margin="0,0,5,0">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
+                            <Button Content="+ Add" Click="AddSimSpeedEvent_OnClick" Margin="5" Padding="10,3"/>
+                            <Button Content="- Remove" Click="RemoveSimSpeedEvent_OnClick" Margin="5" Padding="10,3"/>
+                        </StackPanel>
+                        <ListBox x:Name="SimSpeedEventsList"
+                                 ItemsSource="{Binding SimSpeedView, ElementName=Root}"
+                                 DisplayMemberPath="Name"/>
+                    </DockPanel>
+
+                    <!-- Right: Detail -->
+                    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
+                                  DataContext="{Binding SelectedItem, ElementName=SimSpeedEventsList}">
+                        <StackPanel>
+                            <GroupBox Header="Trigger Settings">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="140"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Name" Margin="5" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Margin="5"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Compare" Margin="5" VerticalAlignment="Center"/>
+                                    <ComboBox Grid.Row="1" Grid.Column="1" SelectedItem="{Binding Compare}" Margin="5">
+                                        <ComboBox.Items>
+                                            <local:Gtl>GreaterThan</local:Gtl>
+                                            <local:Gtl>LessThan</local:Gtl>
+                                        </ComboBox.Items>
+                                    </ComboBox>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Threshold Ratio" ToolTip="Sim speed value that begins tracking. 0.5 = 50%" Margin="5" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding TriggerRatio, UpdateSourceTrigger=LostFocus}" Margin="5"/>
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Duration" ToolTip="How long sim speed must continuously stay past the threshold before the command fires. Format: HH:MM:SS" Margin="5" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding SimSpeedDuration, UpdateSourceTrigger=LostFocus}" Margin="5"/>
+
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Cooldown" ToolTip="Minimum time between consecutive fires. Format: HH:MM:SS" Margin="5" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding SimSpeedCooldown, UpdateSourceTrigger=LostFocus}" Margin="5"/>
+
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Enable Hysteresis" ToolTip="Adds a second threshold for recovery. See info below for details." Margin="5" VerticalAlignment="Center"/>
+                                    <CheckBox Grid.Row="5" Grid.Column="1" IsChecked="{Binding HysteresisEnabled}" Margin="5" VerticalAlignment="Center"/>
+
+                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Recovery Ratio" ToolTip="Sim speed must recover past this value (opposite direction) before re-arming." Margin="5" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding HysteresisRatio, UpdateSourceTrigger=LostFocus}" Margin="5">
+                                        <TextBox.Style>
+                                            <Style TargetType="TextBox">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HysteresisEnabled}" Value="False">
+                                                        <Setter Property="IsEnabled" Value="False"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBox.Style>
+                                    </TextBox>
+
+                                    <Border Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" CornerRadius="5" Background="#FFF0F4FF" Padding="8" Margin="5,8,5,2">
+                                        <TextBlock TextWrapping="Wrap" Foreground="#FF333366" FontSize="11">
+                                            Hysteresis prevents rapid re-triggering when sim speed hovers near the threshold. When enabled, after firing, sim speed must recover past the Recovery Ratio (in the opposite direction) before the event can arm again. Hysteresis is opt-in — leave it off unless you are experiencing repeated triggers from sim speed fluctuation.
+                                        </TextBlock>
+                                    </Border>
+                                </Grid>
+                            </GroupBox>
+
+                            <GroupBox Header="Steps">
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
+                                        <Button Content="+ Add Step" Click="AddSimSpeedStep_OnClick" Margin="5" Padding="10,3"/>
+                                        <Button Content="- Remove Step" Click="RemoveSimSpeedStep_OnClick" Margin="5" Padding="10,3"/>
+                                    </StackPanel>
+                                    <DataGrid x:Name="SimSpeedStepsGrid"
+                                              ItemsSource="{Binding Steps}"
+                                              AutoGenerateColumns="False"
+                                              CanUserAddRows="False"
+                                              CanUserDeleteRows="False"
+                                              MinHeight="50"
+                                              PreviewKeyDown="SimSpeedStepsGrid_PreviewKeyDown">
+                                        <DataGrid.Columns>
+                                            <DataGridTemplateColumn Header="" Width="30" CanUserResize="False" CanUserSort="False">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel>
+                                                            <Button Content="▲" Click="MoveSimSpeedStepUp_OnClick" Padding="0" Margin="0" FontSize="8" Height="14"/>
+                                                            <Button Content="▼" Click="MoveSimSpeedStepDown_OnClick" Padding="0" Margin="0" FontSize="8" Height="14"/>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTemplateColumn Header="Command" Width="*">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBox Text="{Binding Command, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" BorderThickness="0" Background="Transparent"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTemplateColumn Header="Delay (HH:MM:SS)" Width="130">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <TextBox Text="{Binding Delay, UpdateSourceTrigger=LostFocus}" VerticalAlignment="Center" BorderThickness="0" Background="Transparent"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                    <Border DockPanel.Dock="Bottom" CornerRadius="5" Background="#FFE8E8E8" Padding="8" Margin="5,8,5,2">
+                                        <TextBlock TextWrapping="Wrap" Foreground="#FF333333" FontSize="11">
+                                            Use the ▲ ▼ buttons on each row or press the Up/Down arrow keys on your keyboard to reorder steps.
+                                        </TextBlock>
+                                    </Border>
+                                </DockPanel>
+                            </GroupBox>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+
+            <!-- TAB 4: Auto Commands -->
             <TabItem Header="Auto Commands">
                 <Grid Margin="10">
                     <Grid.ColumnDefinitions>
@@ -144,7 +280,7 @@
                             <Button Content="- Remove" Click="RemoveAutoCommand_OnClick" Margin="5" Padding="10,3"/>
                         </StackPanel>
                         <ListBox x:Name="AutoCommandsList"
-                                 ItemsSource="{Binding AutoCommands}"
+                                 ItemsSource="{Binding AutoView, ElementName=Root}"
                                  DisplayMemberPath="Name"/>
                     </DockPanel>
 
@@ -243,7 +379,7 @@
                 </Grid>
             </TabItem>
 
-            <!-- TAB 4: Info Commands -->
+            <!-- TAB 5: Info Commands -->
             <TabItem Header="Info Commands">
                 <DockPanel Margin="10">
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
@@ -265,7 +401,7 @@
                 </DockPanel>
             </TabItem>
 
-            <!-- TAB 5: Block Presets -->
+            <!-- TAB 6: Block Presets -->
             <TabItem Header="Block Presets">
                 <Grid Margin="10">
                     <Grid.ColumnDefinitions>
@@ -372,7 +508,7 @@
                 </Grid>
             </TabItem>
 
-            <!-- TAB 6: Cleanup Presets -->
+            <!-- TAB 7: Cleanup Presets -->
             <TabItem Header="Cleanup Presets">
                 <Grid Margin="10">
                     <Grid.ColumnDefinitions>
@@ -492,7 +628,7 @@
                 </Grid>
             </TabItem>
 
-            <!-- TAB 7: Instructions -->
+            <!-- TAB 8: Instructions -->
             <TabItem Header="Instructions">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="10">
@@ -548,12 +684,12 @@
                                 <StackPanel Margin="15">
                                     <TextBlock FontSize="16" FontWeight="Bold" Text="Auto Commands" Margin="0,0,0,10"/>
                                     <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
-                                        Auto Commands let you schedule any server command to run automatically. You can set them to run on a timer, at a specific time of day, or when certain conditions are met (like low sim speed or a specific number of players).
+                                            Auto Commands let you schedule any server command to run automatically. You can set them to run on a timer, at a specific time of day, or when certain conditions are met (like a specific number of players or grids).
                                     </TextBlock>
                                     <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">How to set up an Auto Command:</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">1. Click "+ Add" to create a new command.</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">2. Give it a name so you can identify it later.</TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">3. Set the Trigger to control when it runs (Timed = repeating interval, Scheduled = specific time of day, SimSpeed = when sim speed drops, etc.).</TextBlock>
+                                        <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">3. Set the Trigger to control when it runs (Timed = repeating interval, Scheduled = specific time of day).</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">4. Set the Interval (format: HH:MM:SS). For Timed triggers, this is how often it repeats. For Scheduled triggers, this is the time of day.</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">5. Add steps - each step is a command that runs in order. Set a Delay between steps if needed.</TextBlock>
                                     <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Reordering Steps:</TextBlock>
@@ -563,6 +699,87 @@
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Step 1: !say Server restarting in 5 minutes (Delay: 00:04:00)</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Step 2: !say Server restarting in 1 minute (Delay: 00:01:00)</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Step 3: !stop (Delay: 00:00:00)</TextBlock>
+                                </StackPanel>
+                            </TabItem>
+
+                            <TabItem Header="Sim Speed Triggers">
+                                <StackPanel Margin="15">
+                                    <TextBlock FontSize="16" FontWeight="Bold" Text="Sim Speed Triggers" Margin="0,0,0,10"/>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                                        Sim Speed Triggers run commands automatically when the server's simulation speed crosses a threshold. Use this to run cleanup, warn players, or run diagnostics when the server is under heavy load — without needing to schedule things on a fixed timer.
+                                    </TextBlock>
+
+                                    <GroupBox Header="How It Works" Margin="0,10,0,0" Padding="10">
+                                        <TextBlock TextWrapping="Wrap">
+                                            When sim speed crosses your Threshold Ratio in the chosen direction, a timer starts. If sim speed STAYS on that side of the threshold for the full Duration, the command fires. After firing, the event cannot fire again until the Cooldown has elapsed. This two-gate system prevents commands from triggering on momentary lag spikes.
+                                        </TextBlock>
+                                    </GroupBox>
+
+                                    <GroupBox Header="Fields" Margin="0,10,0,0" Padding="10">
+                                        <StackPanel>
+                                            <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,4,0,2">Name</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">A label to identify this event in the list.</TextBlock>
+
+                                            <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,4,0,2">Compare</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">GreaterThan — fire when sim speed rises above the threshold. LessThan — fire when sim speed drops below the threshold.</TextBlock>
+
+                                            <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,4,0,2">Threshold Ratio</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">The sim speed value that begins the duration timer. Values are 0.0 (0%) to 1.0 (100%). Example: 0.4 means sim speed must drop below 40% (with LessThan) or rise above 40% (with GreaterThan).</TextBlock>
+
+                                            <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,4,0,2">Duration</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">How long sim speed must continuously stay past the threshold before the command fires. Format: HH:MM:SS. Example: 00:00:10 means the sim speed must stay below (or above) the threshold for 10 uninterrupted seconds. Prevents triggering on brief dips or spikes.</TextBlock>
+
+                                            <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,4,0,2">Cooldown</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">Minimum time between consecutive fires. Format: HH:MM:SS. Example: 00:10:00 means after the command fires, it cannot fire again for at least 10 minutes, regardless of sim speed. Prevents commands from running back-to-back during extended lag periods.</TextBlock>
+
+                                            <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,4,0,2">Enable Hysteresis</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">Opt-in feature that adds a recovery threshold. When enabled, after the command fires, sim speed must recover past the Recovery Ratio (in the opposite direction) before the event can arm again. This is the single best defense against repeated triggers when sim speed hovers near the threshold.</TextBlock>
+
+                                            <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,4,0,2">Recovery Ratio</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">Only active when Hysteresis is enabled. The sim speed value that serves as the recovery threshold, in the opposite direction of Compare. Example: Compare = LessThan, Threshold = 0.4, Recovery Ratio = 0.7 — sim must rise above 70% before re-arming. Leave at 0.7 (default) unless you have a specific reason to change it.</TextBlock>
+                                        </StackPanel>
+                                    </GroupBox>
+
+                                    <GroupBox Header="Hysteresis In Depth" Margin="0,10,0,0" Padding="10">
+                                        <StackPanel>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                                                Hysteresis solves a common problem: sim speed bouncing around the threshold. Without hysteresis, every time sim speed dips below the threshold (even for a split second), the duration timer restarts. In badly fluctuating conditions, this can cause the trigger to either fire unpredictably or never fire at all.
+                                            </TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                                                With hysteresis enabled, two thresholds are used: the main threshold (to start the timer and fire) and a recovery threshold (to re-arm after firing). This creates a "dead zone" where sim speed can fluctuate without causing repeated triggers.
+                                            </TextBlock>
+                                            <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,4,0,2">Example:</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Threshold: LessThan 0.4, Recovery Ratio: 0.7</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">1. Sim drops below 0.4 → duration timer starts → fires after Duration</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">2. Sim bounces around 0.3–0.5 → no re-trigger because hysteresis hasn't cleared</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">3. Sim recovers above 0.7 → hysteresis clears, event can arm again</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">4. Sim drops below 0.4 again → timer restarts, fires after Duration, cycle repeats</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,10,0,8" FontStyle="Italic">
+                                                Hysteresis is opt-in. Leave it disabled (default) unless you are experiencing repeated triggers from sim speed fluctuation. Start with Duration and Cooldown first — add Hysteresis only if you still see rapid re-triggering.
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </GroupBox>
+
+                                    <GroupBox Header="Example: Lag Cleanup" Margin="0,10,0,0" Padding="10">
+                                        <StackPanel>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,4">Problem: Server lags, you want to delete unpowered grids automatically when sim speed drops.</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3" FontWeight="Bold">Name:</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="20,0,0,3">Lag Cleanup</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3" FontWeight="Bold">Compare:</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="20,0,0,3">LessThan</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3" FontWeight="Bold">Threshold Ratio:</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="20,0,0,3">0.4 (fire when sim drops below 40%)</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3" FontWeight="Bold">Duration:</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="20,0,0,3">00:00:10 (sim must stay below 40% for 10 continuous seconds)</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3" FontWeight="Bold">Cooldown:</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="20,0,0,3">00:10:00 (don't run more than once per 10 minutes)</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3" FontWeight="Bold">Hysteresis:</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="20,0,0,3">Enabled, Recovery Ratio: 0.7</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3" FontWeight="Bold">Step 1:</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="20,0,0,3">!admin runcleanup "Dead Grids"</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,10,0,4">With these settings: a brief dip to 38% won't trigger (Duration not met). After cleanup, sim must recover to 70%+ before another cleanup can be scheduled. At most one cleanup every 10 minutes, even during extended lag.</TextBlock>
+                                        </StackPanel>
+                                    </GroupBox>
                                 </StackPanel>
                             </TabItem>
 

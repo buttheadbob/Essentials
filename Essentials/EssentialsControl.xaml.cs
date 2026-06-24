@@ -1,6 +1,8 @@
-﻿using System.Linq;
+﻿using System.ComponentModel;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 
 namespace Essentials
@@ -9,10 +11,26 @@ namespace Essentials
     {
         private EssentialsPlugin Plugin { get; }
 
+        public ICollectionView AutoView { get; }
+        public ICollectionView SimSpeedView { get; }
+
         public EssentialsControl(EssentialsPlugin plugin)
         {
             Plugin = plugin;
             DataContext = plugin.Config;
+
+            AutoView = new CollectionViewSource { Source = plugin.Config.AutoCommands }.View;
+            AutoView.Filter = item => item is AutoCommand cmd && cmd.CommandTrigger != Trigger.SimSpeed;
+
+            SimSpeedView = new CollectionViewSource { Source = plugin.Config.AutoCommands }.View;
+            SimSpeedView.Filter = item => item is AutoCommand cmd && cmd.CommandTrigger == Trigger.SimSpeed;
+
+            plugin.Config.AutoCommands.CollectionChanged += (_, _) =>
+            {
+                AutoView.Refresh();
+                SimSpeedView.Refresh();
+            };
+
             InitializeComponent();
         }
 
@@ -94,6 +112,90 @@ namespace Essentials
             {
                 StepsGrid.UpdateLayout();
                 var row = (DataGridRow)StepsGrid.ItemContainerGenerator.ContainerFromItem(step);
+                row?.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+            }));
+            e.Handled = true;
+        }
+
+        private void AddSimSpeedEvent_OnClick(object sender, RoutedEventArgs e)
+        {
+            var command = new AutoCommand
+            {
+                Name = "New Sim Speed Event",
+                CommandTrigger = Trigger.SimSpeed,
+                SimSpeedDuration = "00:00:05",
+                SimSpeedCooldown = "00:00:30"
+            };
+            Plugin.Config.AutoCommands.Add(command);
+            SimSpeedEventsList.SelectedItem = command;
+        }
+
+        private void RemoveSimSpeedEvent_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (SimSpeedEventsList.SelectedItem is AutoCommand selected)
+            {
+                selected.CommandTrigger = Trigger.Disabled;
+                Plugin.Config.AutoCommands.Remove(selected);
+            }
+        }
+
+        private void AddSimSpeedStep_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (SimSpeedEventsList.SelectedItem is AutoCommand selected)
+                selected.Steps.Add(new AutoCommand.CommandStep());
+        }
+
+        private void RemoveSimSpeedStep_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (SimSpeedEventsList.SelectedItem is AutoCommand cmd && SimSpeedStepsGrid.SelectedItem is AutoCommand.CommandStep step)
+                cmd.Steps.Remove(step);
+        }
+
+        private void MoveSimSpeedStepUp_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.DataContext is AutoCommand.CommandStep step
+                && SimSpeedEventsList.SelectedItem is AutoCommand cmd)
+            {
+                int index = cmd.Steps.IndexOf(step);
+                if (index > 0)
+                    cmd.Steps.Move(index, index - 1);
+            }
+        }
+
+        private void MoveSimSpeedStepDown_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.DataContext is AutoCommand.CommandStep step
+                && SimSpeedEventsList.SelectedItem is AutoCommand cmd)
+            {
+                int index = cmd.Steps.IndexOf(step);
+                if (index >= 0 && index < cmd.Steps.Count - 1)
+                    cmd.Steps.Move(index, index + 1);
+            }
+        }
+
+        private void SimSpeedStepsGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (SimSpeedEventsList.SelectedItem is not AutoCommand cmd
+                || SimSpeedStepsGrid.SelectedItem is not AutoCommand.CommandStep step)
+                return;
+
+            int index = cmd.Steps.IndexOf(step);
+            int newIndex = -1;
+
+            if (e.Key == Key.Up && index > 0)
+                newIndex = index - 1;
+            else if (e.Key == Key.Down && index < cmd.Steps.Count - 1)
+                newIndex = index + 1;
+
+            if (newIndex < 0)
+                return;
+
+            cmd.Steps.Move(index, newIndex);
+            SimSpeedStepsGrid.SelectedItem = step;
+            SimSpeedStepsGrid.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, new System.Action(() =>
+            {
+                SimSpeedStepsGrid.UpdateLayout();
+                var row = (DataGridRow)SimSpeedStepsGrid.ItemContainerGenerator.ContainerFromItem(step);
                 row?.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
             }));
             e.Handled = true;

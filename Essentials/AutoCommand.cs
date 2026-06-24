@@ -29,6 +29,11 @@ namespace Essentials
         private double _triggerCount;
         private bool _isRunning;
 
+        private TimeSpan _simSpeedDuration = TimeSpan.FromSeconds(5);
+        private TimeSpan _simSpeedCooldown = TimeSpan.FromSeconds(30);
+        private bool _hysteresisEnabled;
+        private float _hysteresisRatio = 0.7f;
+
         [XmlIgnore]
         public bool Completed { get; set; }
 
@@ -82,6 +87,36 @@ namespace Essentials
             set => SetValue(ref _triggerCount, Math.Max(0, value));
         }
 
+        [XmlIgnore]
+        public TimeSpan SimSpeedDurationSpan => _simSpeedDuration;
+
+        public string SimSpeedDuration
+        {
+            get => _simSpeedDuration.ToString();
+            set => SetValue(ref _simSpeedDuration, TimeSpan.Parse(value));
+        }
+
+        [XmlIgnore]
+        public TimeSpan SimSpeedCooldownSpan => _simSpeedCooldown;
+
+        public string SimSpeedCooldown
+        {
+            get => _simSpeedCooldown.ToString();
+            set => SetValue(ref _simSpeedCooldown, TimeSpan.Parse(value));
+        }
+
+        public bool HysteresisEnabled
+        {
+            get => _hysteresisEnabled;
+            set => SetValue(ref _hysteresisEnabled, value);
+        }
+
+        public float HysteresisRatio
+        {
+            get => _hysteresisRatio;
+            set => SetValue(ref _hysteresisRatio, Math.Min(Math.Max(value, 0), 1));
+        }
+
         public DayOfWeek DayOfWeek
         {
             get => _day;
@@ -117,7 +152,6 @@ namespace Essentials
             switch (CommandTrigger)
             {
                 case Trigger.GridCount:
-                case Trigger.SimSpeed:
                 case Trigger.PlayerCount:
                     RunNow();
                     _nextRun = DateTime.Now + _interval;

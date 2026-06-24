@@ -135,6 +135,7 @@ namespace Essentials
                            _control.DataContext = Config;
                        });
                     AutoCommands.Instance.Start();
+                    SimSpeedEvents.Instance.Start();
                     InfoModule.Init();
                     _initilized = true;
 
@@ -352,6 +353,7 @@ namespace Essentials
         /// <inheritdoc />
         public override void Dispose()
         {
+            SimSpeedEvents.Instance.Dispose();
             if (_sessionManager != null)
                 _sessionManager.SessionStateChanged -= SessionChanged;
             _sessionManager = null!;

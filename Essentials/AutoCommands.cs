@@ -21,7 +21,6 @@ public class AutoCommands : IDisposable
     public static AutoCommands Instance => _instance ?? (_instance = new AutoCommands());
     private static readonly Logger Log = LogManager.GetLogger("Essentials");
     private Timer _timer = null!;
-    private readonly Dictionary<AutoCommand,DateTime> _simSpeedCheck  = new Dictionary<AutoCommand, DateTime>();
 
     public void Start()
     {
@@ -77,47 +76,7 @@ public class AutoCommands : IDisposable
                 break;
 
             case Trigger.SimSpeed:
-                var commandActive = _simSpeedCheck.TryGetValue(command, out var time);
-                switch (command.Compare)
-                {
-                    case GreaterThan:
-                        if (commandActive)
-                        {
-                            if ((DateTime.Now - time).TotalSeconds < command.TriggerCount) break;
-                            _simSpeedCheck.Remove(command);
-                            return Math.Min(Sync.ServerSimulationRatio, 1) > command.TriggerRatio;
-                        }
-
-                        if (Math.Min(Sync.ServerSimulationRatio, 1) < command.TriggerRatio) break;
-                        _simSpeedCheck.Add(command, DateTime.Now);
-                        break;
-
-                    case LessThan:
-                        if (commandActive)
-                        {
-                            if ((DateTime.Now - time).TotalSeconds < command.TriggerCount) break;
-                            _simSpeedCheck.Remove(command);
-                            return Math.Min(Sync.ServerSimulationRatio, 1) < command.TriggerRatio;
-                        }
-
-                        if (Math.Min(Sync.ServerSimulationRatio, 1) > command.TriggerRatio) break;
-                        _simSpeedCheck.Add(command, DateTime.Now);
-                        break;
-
-                    case Equal:
-                        if (commandActive)
-                        {
-                            if ((DateTime.Now - time).TotalSeconds < command.TriggerCount) break;
-                            _simSpeedCheck.Remove(command);
-                            return (Math.Abs(Sync.ServerSimulationRatio - command.TriggerRatio) <= 0);
-                        }
-
-                        if (Math.Abs(Sync.ServerSimulationRatio - command.TriggerRatio)>0)
-                            break;
-                        _simSpeedCheck.Add(command, DateTime.Now);
-                        break;
-                }
-                break;
+                return false;
                             
             default:
                 throw new Exception("fuck it");
