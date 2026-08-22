@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using Sandbox.Game.Entities;
 using Sandbox.Game.World;
-using VRage.Game;
 
 namespace Essentials.Utils;
 
@@ -62,10 +61,6 @@ public class Ownership
 
     public static bool IsNpcIdentity(long identityId)
     {
-        var faction = MySession.Static.Factions.TryGetPlayerFaction(identityId);
-        if (faction != null)
-            return faction.FactionType != MyFactionTypes.PlayerMade && faction.FactionType != MyFactionTypes.None;
-
         return MySession.Static.Players.TryGetSteamId(identityId) == 0;
     }
 

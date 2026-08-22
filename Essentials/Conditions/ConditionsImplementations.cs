@@ -196,7 +196,7 @@ namespace Essentials.Commands
             return Vector3D.DistanceSquared(Vector3D.Zero, grid.PositionComp.GetPosition()) < dist;
         }
 
-        [Condition("ownedby", helpText: "Finds grids owned by the given player. Can specify player name, IdentityId, 'nobody', or 'pirates'.")]
+        [Condition("ownedby", helpText: "Finds grids owned by the given player. Can specify player name, IdentityId, 'nobody', 'npc', or 'pirates'.")]
         public static bool OwnedBy(MyCubeGrid grid, string str)
         {
             var allOwners = Utils.Ownership.GetAllOwnerIds(grid);
@@ -207,7 +207,7 @@ namespace Essentials.Commands
                 return allOwners.Count == 0;
             }
 
-            if (string.Compare(str, "npc", StringComparison.Ordinal) == 0)
+            if (string.Compare(str, "npc", StringComparison.InvariantCultureIgnoreCase) == 0)
             {
                 var ownerId = Utils.Ownership.GetOwner(grid);
                 return ownerId != 0 && Utils.Ownership.IsNpcIdentity(ownerId);
