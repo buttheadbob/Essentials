@@ -2,6 +2,9 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Globalization;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Torch;
 
@@ -28,14 +31,44 @@ public class BlockList : ViewModel
     public string GetCommand(string action, BlockListItem item)
     {
         var sb = new StringBuilder();
-        sb.Append($"!blocks {action} {item.Selector.ToString().ToLower()} {item.Value}");
+        sb.Append($"!blocks {action} {item.Selector.ToString().ToLower()} {Quote(item.Value)}");
         foreach (var condition in Conditions)
         {
             sb.Append($" {condition.Condition.ToCommandString()}");
             if (!string.IsNullOrWhiteSpace(condition.Parameter))
-                sb.Append($" {condition.Parameter}");
+                sb.Append($" {Quote(condition.Parameter!)}");
         }
         return sb.ToString();
+    }
+
+    private static string Quote(string value) => value.Contains(' ') ? $"\"{value}\"" : value;
+
+    protected override void OnPropertyChanged([CallerMemberName] string propName = "")
+    {
+        base.OnPropertyChanged(propName);
+        if (propName != nameof(Problem))
+            base.OnPropertyChanged(nameof(Problem));
+    }
+
+    /// <summary>
+    /// Problems that would stop this preset from running correctly, or null when it is ready.
+    /// </summary>
+    public string? Problem
+    {
+        get
+        {
+            if (Items.Count == 0)
+                return "Add at least one item.";
+            if (Items.Any(i => string.IsNullOrWhiteSpace(i.Value)))
+                return "Every item needs a Value.";
+            var missing = Conditions.FirstOrDefault(c => c.Condition.RequiresParameter() && string.IsNullOrWhiteSpace(c.Parameter));
+            if (missing != null)
+                return $"Condition '{missing.Condition}' needs a Parameter.";
+            var extra = Conditions.FirstOrDefault(c => !c.Condition.RequiresParameter() && !string.IsNullOrWhiteSpace(c.Parameter));
+            if (extra != null)
+                return $"Condition '{extra.Condition}' does not take a Parameter.";
+            return null;
+        }
     }
 
     private void WatchSubCollection<T>(ObservableCollection<T> collection) where T : ViewModel
@@ -69,7 +102,11 @@ public class BlockListItem : ViewModel
     public string Delay
     {
         get => DelaySpan.ToString();
-        set => SetValue(ref DelaySpan, TimeSpan.Parse(value));
+        set
+        {
+            if (TimeSpan.TryParse(value, CultureInfo.InvariantCulture, out var span))
+                SetValue(ref DelaySpan, span);
+        }
     }
 
     public override string ToString() => $"{Selector}: {Value}";
@@ -137,6 +174,15 @@ public static class ConditionTypeExtensions
             ConditionType.HasSubtypeFast => "hassubtype-fast",
             ConditionType.NoSubtypeFast => "nosubtype-fast",
             _ => condition.ToString().ToLower()
+        };
+    }
+
+    public static bool RequiresParameter(this ConditionType condition)
+    {
+        return condition switch
+        {
+            ConditionType.HasPower or ConditionType.NoPower or ConditionType.InsidePlanet or ConditionType.HasPilot => false,
+            _ => true
         };
     }
 }

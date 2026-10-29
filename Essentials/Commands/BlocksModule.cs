@@ -149,8 +149,7 @@ public class BlocksModule : CommandModule
             {
                 foreach (var block in grid.GetBlocks())
                 {
-                    var blockType = block.BlockDefinition.Id.TypeId.ToString().Substring(16);
-                    if (string.Compare(type, blockType, StringComparison.InvariantCultureIgnoreCase) == 0)
+                    if (Utilities.IsBlockType(block.BlockDefinition.Id.TypeId, type))
                         toRemove.Add(block);
                 }
             }
@@ -167,8 +166,7 @@ public class BlocksModule : CommandModule
             {
                 foreach (var block in grid.GetFatBlocks().OfType<MyFunctionalBlock>())
                 {
-                    var blockType = block.BlockDefinition.Id.TypeId.ToString().Substring(16);
-                    if (string.Compare(type, blockType, StringComparison.InvariantCultureIgnoreCase) == 0)
+                    if (Utilities.IsBlockType(block.BlockDefinition.Id.TypeId, type))
                     {
                         if (ExecuteAction(block, action))
                             count++;

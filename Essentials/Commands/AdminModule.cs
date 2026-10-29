@@ -89,7 +89,7 @@ public class AdminModule : CommandModule
     [Permission(MyPromoteLevel.Admin)]
     public void RunAuto(string name)
     {
-        var command = EssentialsPlugin.Instance.Config.AutoCommands.FirstOrDefault(c => c.Name.Equals(name));
+        var command = FindAutoCommand(name);
         if (command == null)
         {
             Context.Respond($"Couldn't find an auto command with the commandName {name}");
@@ -99,20 +99,25 @@ public class AdminModule : CommandModule
         command.RunNow();
     }
 
+    private static AutoCommand? FindAutoCommand(string name)
+    {
+        return EssentialsPlugin.Instance.Config.AutoCommands.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+    }
+
     [Command("runpreset", "Runs the custom block preset with the given preset name immediately")]
     [Permission(MyPromoteLevel.Admin)]
     public void RunPreset(string name)
     {
-        var preset = EssentialsPlugin.Instance.Config.BlockLists.FirstOrDefault(b => b.Name.Equals(name));
+        var preset = EssentialsPlugin.Instance.Config.BlockLists.FirstOrDefault(b => string.Equals(b.Name, name, StringComparison.OrdinalIgnoreCase));
         if (preset == null)
         {
             Context.Respond($"Couldn't find a block preset with the name '{name}'");
             return;
         }
 
-        if (preset.Items.Count == 0)
+        if (preset.Problem is { } problem)
         {
-            Context.Respond($"Block preset '{name}' has no items configured.");
+            Context.Respond($"Block preset '{preset.Name}' was not run: {problem}");
             return;
         }
 
@@ -146,24 +151,16 @@ public class AdminModule : CommandModule
     [Permission(MyPromoteLevel.Admin)]
     public void RunCleanup(string name)
     {
-        var preset = EssentialsPlugin.Instance.Config.CleanupPresets.FirstOrDefault(c => c.Name.Equals(name));
+        var preset = EssentialsPlugin.Instance.Config.CleanupPresets.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
         if (preset == null)
         {
             Context.Respond($"Couldn't find a cleanup preset with the name '{name}'");
             return;
         }
 
-        if (preset.Action != CleanupAction.DeleteFloatingObjects
-            && !preset.ApplyToAll && preset.Targets.Count == 0)
+        if (preset.Problem is { } problem)
         {
-            Context.Respond($"Cleanup preset '{name}' has no targets configured and Apply To All is not checked.");
-            return;
-        }
-
-        if (preset.Action != CleanupAction.DeleteFloatingObjects
-            && preset.ApplyToAll && preset.Conditions.Count == 0)
-        {
-            Context.Respond($"Cleanup preset '{name}' has Apply To All checked but no conditions configured.");
+            Context.Respond($"Cleanup preset '{preset.Name}' was not run: {problem}");
             return;
         }
 
@@ -196,7 +193,7 @@ public class AdminModule : CommandModule
     [Permission(MyPromoteLevel.Admin)]
     public void EndAuto(string commandName)
     {
-        var command = EssentialsPlugin.Instance.Config.AutoCommands.FirstOrDefault(c => c.Name.Equals(commandName));
+        var command = FindAutoCommand(commandName);
         if (command == null)
         {
             Context.Respond($"Couldn't find an auto command with the commandName {commandName}");
@@ -291,27 +288,6 @@ public class AdminModule : CommandModule
         }
     }
 
-    [Command("set toolbar", "Makes your current toolbar the new default toolbar for new players.")]
-    [Permission(MyPromoteLevel.Admin)]
-    public void SetToolbar()
-    {
-        if (Context.Player == null)
-        {
-            Context.Respond("Command not available from console.");
-            return;
-        }
-
-        var toolbar = MySession.Static.Toolbars.TryGetPlayerToolbar(new(Context.Player.SteamUserId));
-        if (toolbar == null)
-        {
-            Context.Respond("Couldn't find your toolbar");
-            return;
-        }
-
-        EssentialsPlugin.Instance.Config.DefaultToolbar = toolbar.GetObjectBuilder();
-        Context.Respond("Successfully set new default toolbar.");
-    }
-
     [Command("setrank", "Set the promote level of a player.")]
     [Permission(MyPromoteLevel.Admin)]
     public void SetRank(string playerNameOrId, string rank)
@@ -383,24 +359,15 @@ public class AdminModule : CommandModule
         Context.Respond($"ID {id} removed from reserved slots.");
     }
 
-    private static Dictionary<ulong, DateTime> _muted = null!;
-    private Timer _muteTimer = null!;
-    private IChatManagerServer _chatManager = null!;
-    private IChatManagerServer ChatManager => _chatManager ?? (EssentialsPlugin.Instance.Torch.CurrentSession.Managers.GetManager<IChatManagerServer>());
-    private List<ulong> _removeCache = null!;
+    // Command modules are created per command, so mute state must be static.
+    private static readonly Dictionary<ulong, DateTime> _muted = [];
+    private static readonly object _muteLock = new();
+    private static Timer? _muteTimer;
+    private static IChatManagerServer? ChatManager => EssentialsPlugin.Instance.Torch.CurrentSession?.Managers?.GetManager<IChatManagerServer>();
 
     [Command("mute", "Mutes a user in global chat for the given number of minutes.")]
     public void MuteUser(string user, int timeout = 0)
     {
-        if (_muteTimer == null)
-        {
-            _muteTimer = new Timer(1000);
-            _muteTimer.AutoReset = true;
-            _muteTimer.Elapsed += _muteTimer_Elapsed;
-            _muted = [];
-            _removeCache = [];
-        }
-
         var p = Utilities.GetPlayerByNameOrId(user);
         if (p == null)
         {
@@ -409,42 +376,53 @@ public class AdminModule : CommandModule
         }
 
 
-        bool res = ChatManager.MuteUser(p.SteamUserId);
+        bool res = ChatManager?.MuteUser(p.SteamUserId) ?? false;
 
         if(!res)
             Context.Respond($"Failed to mute user {user}. They are already muted.");
         else
-            Context.Respond($"Muted user {p.DisplayName}");
+            Context.Respond(timeout > 0 ? $"Muted user {p.DisplayName} for {timeout} minute(s)" : $"Muted user {p.DisplayName}");
 
         if (timeout > 0)
         {
-            lock (_muted)
+            lock (_muteLock)
+            {
                 _muted[p.SteamUserId] = DateTime.Now + TimeSpan.FromMinutes(timeout);
-            _muteTimer.Start();
+                if (_muteTimer == null)
+                {
+                    _muteTimer = new Timer(1000) { AutoReset = true };
+                    _muteTimer.Elapsed += MuteTimerElapsed;
+                    _muteTimer.Start();
+                }
+            }
         }
     }
 
-    private void _muteTimer_Elapsed(object sender, ElapsedEventArgs e)
+    private static void MuteTimerElapsed(object sender, ElapsedEventArgs e)
     {
-        lock (_muted)
+        List<ulong> expired;
+        lock (_muteLock)
         {
-            foreach (var p in _muted)
-            {
-                if(p.Value > DateTime.Now)
-                    continue;
+            expired = _muted.Where(m => m.Value <= DateTime.Now).Select(m => m.Key).ToList();
+            foreach (var id in expired)
+                _muted.Remove(id);
 
-                _removeCache.Add(p.Key);
-                ChatManager.UnmuteUser(p.Key);
-            }
-            foreach (var r in _removeCache)
+            if (_muted.Count == 0 && _muteTimer != null)
             {
-                _muted.Remove(r);
+                _muteTimer.Dispose();
+                _muteTimer = null;
             }
-            _removeCache.Clear();
-
-            if (_muted.Count == 0)
-                _muteTimer.Stop();
         }
+
+        if (expired.Count == 0)
+            return;
+
+        // Chat manager state belongs to the game thread.
+        EssentialsPlugin.Instance.Torch.Invoke(() =>
+        {
+            foreach (var id in expired)
+                ChatManager?.UnmuteUser(id);
+        });
     }
 
     [Command("unmute", "Removes a chat mute from a user, if they have been muted.")]
@@ -456,7 +434,9 @@ public class AdminModule : CommandModule
             Context.Respond($"Could not find user {user}");
             return;
         }
-        bool res = ChatManager.UnmuteUser(p.SteamUserId);
+        bool res = ChatManager?.UnmuteUser(p.SteamUserId) ?? false;
+        lock (_muteLock)
+            _muted.Remove(p.SteamUserId);
 
         if (!res)
             Context.Respond($"Failed to unmute user {user}. They are not muted.");
@@ -467,7 +447,8 @@ public class AdminModule : CommandModule
     [Command("list mute", "Lists all muted users, an their timeout, if applciable.")]
     public void ListMute()
     {
-        if (_muted?.Count == 0 && ChatManager.MutedUsers.Count == 0)
+        var mutedUsers = ChatManager?.MutedUsers.ToList();
+        if (mutedUsers == null || mutedUsers.Count == 0)
         {
             Context.Respond("No muted users.");
             return;
@@ -475,16 +456,15 @@ public class AdminModule : CommandModule
 
         var sb = new StringBuilder();
 
-        foreach (var m in ChatManager.MutedUsers)
+        foreach (var m in mutedUsers)
         {
             var s = MySession.Static.Players.TryGetIdentityNameFromSteamId(m);
             if(string.IsNullOrEmpty(s))
                 s = m.ToString();
-            bool f = false;
-            DateTime t = default(DateTime);
-            if(_muted != null)
-                lock (_muted)
-                    f = _muted.TryGetValue(m, out t);
+            bool f;
+            DateTime t;
+            lock (_muteLock)
+                f = _muted.TryGetValue(m, out t);
 
             sb.AppendLine($"{s}: {(f ? (t - DateTime.Now).ToString(@"hh\:mm\:ss") : "inf")}");
         }

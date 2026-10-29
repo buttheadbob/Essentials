@@ -176,14 +176,23 @@ public class EcoModule : CommandModule {
         }
 
         var finalFromBalance = MyBankingSystem.GetBalance(fromIdentitiyId) - amount;
-        var finalToBalance = MyBankingSystem.GetBalance(toIdentitiyId) + amount;
 
         if(finalFromBalance < 0) {
             Context.Respond($"Sorry, but you are short {-finalFromBalance:#,##0} credits!");
             return;
         }
 
-        MyBankingSystem.RequestTransfer_BroadcastToClients(Context.Player.Identity.IdentityId, p.Identity.IdentityId, amount, finalFromBalance, finalToBalance);
+        // ChangeBalance updates the server and broadcasts the new balance to clients.
+        if (!MyBankingSystem.ChangeBalance(fromIdentitiyId, -amount)) {
+            Context.Respond("The payment could not be made.");
+            return;
+        }
+
+        if (!MyBankingSystem.ChangeBalance(toIdentitiyId, amount)) {
+            MyBankingSystem.ChangeBalance(fromIdentitiyId, amount);
+            Context.Respond("The payment could not be made.");
+            return;
+        }
         ModCommunication.SendMessageTo(new NotificationMessage($"Your have received {amount:#,##0} credits from {Context.Player.DisplayName}!", 10000, "Blue"), p.SteamUserId);
         ModCommunication.SendMessageTo(new NotificationMessage($"Your have sent {amount:#,##0} credits to {p.DisplayName}!", 10000, "Blue"), Context.Player.SteamUserId);
     }

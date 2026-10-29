@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Timers;
+using NLog;
 using Sandbox.Game.Multiplayer;
 using Sandbox.Game.World;
+using Timer = System.Timers.Timer;
 
 namespace Essentials;
 
@@ -11,8 +14,10 @@ public class SimSpeedEvents : IDisposable
 {
     private static SimSpeedEvents _instance = null!;
     public static SimSpeedEvents Instance => _instance ??= new SimSpeedEvents();
+    private static readonly Logger Log = LogManager.GetLogger("Essentials");
 
-    private Timer _timer = null!;
+    private Timer? _timer;
+    private int _tickQueued;
     private readonly Dictionary<AutoCommand, State> _states = new Dictionary<AutoCommand, State>();
 
     private class State
@@ -24,13 +29,45 @@ public class SimSpeedEvents : IDisposable
 
     public void Start()
     {
+        if (_timer != null)
+            return;
+
         _timer = new Timer(1000);
-        _timer.Elapsed += Tick;
+        _timer.Elapsed += TimerElapsed;
         _timer.AutoReset = true;
         _timer.Start();
     }
 
-    private void Tick(object sender, ElapsedEventArgs e)
+    public void Stop()
+    {
+        _timer?.Dispose();
+        _timer = null;
+    }
+
+    private void TimerElapsed(object sender, ElapsedEventArgs e)
+    {
+        // Evaluate on the game thread; skip this tick if the previous one has not been processed yet.
+        if (Interlocked.Exchange(ref _tickQueued, 1) == 1)
+            return;
+
+        EssentialsPlugin.Instance.Torch.Invoke(() =>
+        {
+            try
+            {
+                Tick();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error encountered during sim speed update!");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _tickQueued, 0);
+            }
+        });
+    }
+
+    private void Tick()
     {
         var config = EssentialsPlugin.Instance.Config;
         if (config == null)
@@ -42,11 +79,11 @@ public class SimSpeedEvents : IDisposable
         var simSpeed = Math.Min(Sync.ServerSimulationRatio, 1);
         var now = DateTime.UtcNow;
 
-        foreach (var cmd in config.AutoCommands)
-        {
-            if (cmd.CommandTrigger != Trigger.SimSpeed)
-                continue;
+        // Snapshot, since the UI can edit the list at any time.
+        var commands = config.AutoCommands.Where(c => c.CommandTrigger == Trigger.SimSpeed).ToList();
 
+        foreach (var cmd in commands)
+        {
             if (cmd.IsRunning())
                 continue;
 
@@ -66,46 +103,34 @@ public class SimSpeedEvents : IDisposable
             {
                 state.ConditionMetAt = DateTime.MinValue;
 
-                if (cmd.HysteresisEnabled && !state.HysteresisCleared && cooldownElapsed)
-                {
-                    if (cmd.Compare == Gtl.LessThan && simSpeed > cmd.HysteresisRatio)
-                        state.HysteresisCleared = true;
-                    else if (cmd.Compare == Gtl.GreaterThan && simSpeed < cmd.HysteresisRatio)
-                        state.HysteresisCleared = true;
-                }
+                // Recovery counts at any time after firing, including during the cooldown.
+                // The cooldown only delays the next fire.
+                if (cmd.HysteresisEnabled && !state.HysteresisCleared && IsRecovered(cmd, simSpeed))
+                    state.HysteresisCleared = true;
             }
-            else
+            else if (cmd.HysteresisEnabled && !state.HysteresisCleared)
             {
-                if (!state.HysteresisCleared && cmd.HysteresisEnabled && cooldownElapsed)
-                {
-                    state.ConditionMetAt = DateTime.MinValue;
-                }
-                else if (cooldownElapsed)
-                {
-                    if (state.ConditionMetAt == DateTime.MinValue)
-                        state.ConditionMetAt = now;
+                // Still waiting for sim speed to recover past the recovery ratio.
+                state.ConditionMetAt = DateTime.MinValue;
+            }
+            else if (cooldownElapsed)
+            {
+                if (state.ConditionMetAt == DateTime.MinValue)
+                    state.ConditionMetAt = now;
 
-                    if ((now - state.ConditionMetAt) >= cmd.SimSpeedDurationSpan)
-                    {
-                        cmd.RunNow();
-                        state.LastFiredAt = now;
-                        state.ConditionMetAt = DateTime.MinValue;
-                        state.HysteresisCleared = !cmd.HysteresisEnabled;
-                    }
+                if ((now - state.ConditionMetAt) >= cmd.SimSpeedDurationSpan)
+                {
+                    cmd.RunNow();
+                    state.LastFiredAt = now;
+                    state.ConditionMetAt = DateTime.MinValue;
+                    state.HysteresisCleared = !cmd.HysteresisEnabled;
                 }
             }
         }
 
-        CleanupStaleStates();
-    }
-
-    private void CleanupStaleStates()
-    {
-        var activeIds = new HashSet<AutoCommand>(
-            EssentialsPlugin.Instance.Config.AutoCommands.Where(c => c.CommandTrigger == Trigger.SimSpeed));
-
-        var stale = _states.Keys.Where(k => !activeIds.Contains(k)).ToList();
-        foreach (var key in stale)
+        // Forget state for events that were removed or changed to another trigger.
+        var active = new HashSet<AutoCommand>(commands);
+        foreach (var key in _states.Keys.Where(k => !active.Contains(k)).ToList())
             _states.Remove(key);
     }
 
@@ -119,10 +144,19 @@ public class SimSpeedEvents : IDisposable
         };
     }
 
+    private static bool IsRecovered(AutoCommand cmd, float simSpeed)
+    {
+        return cmd.Compare switch
+        {
+            Gtl.LessThan => simSpeed > cmd.HysteresisRatio,
+            Gtl.GreaterThan => simSpeed < cmd.HysteresisRatio,
+            _ => true
+        };
+    }
+
     public void Dispose()
     {
-        _timer?.Dispose();
-        _timer = null!;
+        Stop();
         _states.Clear();
     }
 }

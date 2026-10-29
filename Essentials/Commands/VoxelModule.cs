@@ -11,6 +11,7 @@ using Sandbox.Game.World.Generator;
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
@@ -226,7 +227,7 @@ public class VoxelModule : CommandModule
         var maps = new List<MyPlanet>(2);
         foreach (MyPlanet map in MyEntities.GetEntities().OfType<MyPlanet>())
         {
-            if (map.StorageName.Contains(planetName, StringComparison.CurrentCultureIgnoreCase))
+            if (map.StorageName?.Contains(planetName, StringComparison.CurrentCultureIgnoreCase) == true)
                 maps.Add(map);
         }
 
@@ -253,7 +254,17 @@ public class VoxelModule : CommandModule
     public void ResetVoxelArea(float radius)
     {
         if (Context.Player == null)
-            Context.Respond("Invalid command input! Must be in-game!");
+        {
+            Context.Respond("This command must be used in-game. From the console use: !voxels reset gps <x y z> <radius>");
+            return;
+        }
+
+        var entity = Context.Player.Controller?.ControlledEntity?.Entity;
+        if (entity == null || Context.Player.Character == null || Context.Player.Character.IsDead)
+        {
+            Context.Respond("You must be alive in the world to use this command.");
+            return;
+        }
 
         if (radius <= 0)
         {
@@ -261,25 +272,71 @@ public class VoxelModule : CommandModule
             return;
         }
 
-        Context.Respond(ResetVoxelInArea(Context.Player!.GetPosition(), radius) 
+        Context.Respond(ResetVoxelInArea(entity.PositionComp.GetPosition(), radius)
             ? "Voxel reset complete!" 
             : "Couldn't reset voxels! Check log for more information!");
     }
 
-    [Command("reset gps", "Resets voxel damange in specified radius from given point")]
+    [Command("reset gps", "Resets voxel damange in specified radius from given point. Usage: !voxels reset gps <x y z | x:y:z | GPS:Name:x:y:z:> <radius>")]
     [Permission(MyPromoteLevel.Admin)]
-    public void ResetVoxelArea(float x, float y, float z, float radius)
+    public void ResetVoxelGps()
     {
-        Vector3D resetTarget = new(x, y, z);
-        if (radius <= 0)
+        // Args are parsed manually so coordinates can be given as "x y z", "x:y:z" or a pasted GPS string
+        const string usage = "Usage: !voxels reset gps <x y z | x:y:z | GPS:Name:x:y:z:> <radius>";
+        var args = Context.Args;
+
+        if (args.Count < 2)
         {
-            _log.Info("Invalid Radius Input!");
+            Context.Respond(usage);
             return;
         }
 
-        Context.Respond(ResetVoxelInArea(resetTarget, radius) 
-            ? "Voxel reset complete!" 
+        if (!double.TryParse(args[args.Count - 1], NumberStyles.Float, CultureInfo.InvariantCulture, out var radius) || radius <= 0)
+        {
+            Context.Respond("Invalid radius!");
+            return;
+        }
+
+        if (!TryParsePosition(string.Join(" ", args.Take(args.Count - 1)), out var resetTarget))
+        {
+            Context.Respond($"Invalid coordinates! {usage}");
+            return;
+        }
+
+        Context.Respond(ResetVoxelInArea(resetTarget, (float)radius)
+            ? "Voxel reset complete!"
             : "Couldn't reset voxels! Check log for more information!");
+    }
+
+    private static bool TryParsePosition(string text, out Vector3D position)
+    {
+        position = Vector3D.Zero;
+        text = text.Trim();
+
+        string[] parts;
+        if (text.StartsWith("GPS:", StringComparison.OrdinalIgnoreCase))
+        {
+            // GPS:Name:X:Y:Z:#Color:
+            var gpsParts = text.Split(':');
+            if (gpsParts.Length < 5)
+                return false;
+            parts = new[] { gpsParts[2], gpsParts[3], gpsParts[4] };
+        }
+        else
+        {
+            parts = text.Split(new[] { ':', ' ', ',' }, StringSplitOptions.RemoveEmptyEntries);
+        }
+
+        if (parts.Length != 3)
+            return false;
+
+        if (!double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var z))
+            return false;
+
+        position = new Vector3D(x, y, z);
+        return true;
     }
 
     public static bool ResetVoxelInArea(Vector3D center, float radius, bool updatePlayers = true)
@@ -287,7 +344,10 @@ public class VoxelModule : CommandModule
         try
         {
             BoundingSphereD Sphere = new BoundingSphereD(center, radius);
-            List<MyVoxelBase> Maps = MyEntities.GetEntitiesInSphere(ref Sphere).OfType<MyVoxelBase>().ToList();
+            // Use our own list: MyEntities.GetEntitiesInSphere returns SE's shared list, which callers must clear.
+            var found = new List<MyEntity>();
+            MyGamePruningStructure.GetAllEntitiesInSphere(ref Sphere, found);
+            List<MyVoxelBase> Maps = found.OfType<MyVoxelBase>().ToList();
             if (Maps.Count == 0)
                 return true;
 

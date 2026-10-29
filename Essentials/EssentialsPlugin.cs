@@ -42,8 +42,6 @@ namespace Essentials
     public class EssentialsPlugin : TorchPluginBase, IWpfPlugin
     {
         public EssentialsConfig Config => _config?.Data!;
-        public string homeDataPath = "";
-        public string rankDataPath = "";
 
         private TorchSessionManager _sessionManager = null!;
         public CommandManager CommandManager = null!;
@@ -81,16 +79,6 @@ namespace Essentials
                 _sessionManager.SessionStateChanged += SessionChanged;
             else
                 Log.Warn("No session manager.  MOTD won't work");
-            homeDataPath = Path.Combine(StoragePath, "players.json");
-            if (!File.Exists(homeDataPath)) {
-                File.Create(homeDataPath);
-            }
-            
-            rankDataPath = Path.Combine(StoragePath, "ranks.json");
-            if (!File.Exists(rankDataPath)) {
-                File.Create(rankDataPath);
-            }
-
             Instance = this;
             _pm = torch.Managers.GetManager<PatchManager>();
             _context = _pm.AcquireContext();
@@ -126,6 +114,7 @@ namespace Essentials
                     mpMan.PlayerJoined += MotdOnce;
 
                     mpMan.PlayerLeft += ResetMotdOnce;
+                    cmdMan.OnCommandExecuting += CommandPermissions.OnCommandExecuting;
                     MyEntities.OnEntityAdd += EntityAdded;
                     if(Config.StopShipsOnStart)
                         StopShips();
@@ -149,8 +138,12 @@ namespace Essentials
                     {
                         mpMan.PlayerLeft -= ResetMotdOnce;
                         mpMan.PlayerJoined -= MotdOnce;
+                        cmdMan.OnCommandExecuting -= CommandPermissions.OnCommandExecuting;
                         MyEntities.OnEntityAdd -= EntityAdded;
                     }
+
+                    AutoCommands.Instance.Stop();
+                    SimSpeedEvents.Instance.Stop();
 
 
                     _bagTracker.Clear();
@@ -353,6 +346,7 @@ namespace Essentials
         /// <inheritdoc />
         public override void Dispose()
         {
+            AutoCommands.Instance.Dispose();
             SimSpeedEvents.Instance.Dispose();
             if (_sessionManager != null)
                 _sessionManager.SessionStateChanged -= SessionChanged;

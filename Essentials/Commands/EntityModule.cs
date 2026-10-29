@@ -18,6 +18,8 @@ using VRage.Game;
 using VRage.Network;
 using VRage.Replication;
 using Sandbox.Game;
+using Sandbox.Game.Entities.Cube;
+using Sandbox.Game.EntityComponents;
 using VRage.Game.ModAPI.Interfaces;
 // ReSharper disable InconsistentNaming
 
@@ -53,10 +55,10 @@ public class EntityModule : CommandModule
         var steamid = Context.Player.SteamUserId;
         if (_commandtimeout.TryGetValue(steamid, out DateTime lastcommand))
         {
-            TimeSpan difference = DateTime.Now - lastcommand;
-            if (difference.TotalMinutes < 1)
+            TimeSpan remaining = TimeSpan.FromMinutes(1) - (DateTime.Now - lastcommand);
+            if (remaining > TimeSpan.Zero)
             {
-                Context.Respond($"Cooldown active. You can use this command again in {difference.TotalSeconds:N0} seconds");
+                Context.Respond($"Cooldown active. You can use this command again in {Math.Ceiling(remaining.TotalSeconds):N0} seconds");
                 return;
             }
                 
@@ -129,6 +131,9 @@ public class EntityModule : CommandModule
             return;
         }
 
+        if (entity is MyCubeGrid grid)
+            Utilities.EjectPilots(grid);
+
         entity!.Close();
         Context.Respond($"Entity '{entity.DisplayName}' deleted");
     }
@@ -147,7 +152,7 @@ public class EntityModule : CommandModule
             MyVisualScriptLogicProvider.SetPlayersHealth(player.IdentityId, 0);
 
             Context.Torch.CurrentSession?.Managers?.GetManager<IChatManagerServer>()?.SendMessageAsSelf
-                ($"{player.DisplayName} was killed by an admin [{Context.Player.DisplayName ?? "Console Command"}]");
+                ($"{player.DisplayName} was killed by an admin [{Context.Player?.DisplayName ?? "Console Command"}]");
 
             return;
         }
@@ -192,41 +197,21 @@ public class EntityModule : CommandModule
         Context.Respond(sb.ToString());
     }
 
-    [Command("poweroff", "Power off entities with the given text in their name.")]
+    [Command("poweroff", "Turns off every power-producing block (reactors, batteries, solar, wind, engines, ...) on a grid and everything attached by rotors, hinges and pistons. Usage: poweroff <grid> [includeConnectorDocked]")]
     [Permission(MyPromoteLevel.SpaceMaster)]
-    public void PowerOff(string name)
+    public void PowerOff(string name, bool includeConnectorDocked = false)
     {
-
-        if (string.IsNullOrEmpty(name))
-            return;
-
-        if (!Utilities.TryGetEntityByNameOrId(name, out IMyEntity? entity))
-        {
-            Context.Respond($"Entity '{name}' not found.");
-            return;
-        }
-
-        if (entity is IMyCharacter)
-        {
-            Context.Respond("Command do not work on characters.");
-            return;
-        }
-        IMyCubeGrid? grid = entity as MyCubeGrid;
-        List<IMySlimBlock> blocks = [];
-        grid?.GetBlocks(blocks, f => f.FatBlock is IMyFunctionalBlock && (f.FatBlock.BlockDefinition.TypeId == typeof(MyObjectBuilder_Reactor) 
-                                                                          || f.FatBlock.BlockDefinition.TypeId == typeof(MyObjectBuilder_BatteryBlock) 
-                                                                          || f.FatBlock.BlockDefinition.TypeId == typeof(MyObjectBuilder_SolarPanel)));
-        var list = blocks.Select(f => (IMyFunctionalBlock)f.FatBlock).Where(f => f.Enabled).ToArray();
-        foreach (var item in list)
-        {
-            item.Enabled = false;
-        }
-        Context.Respond($"Entity '{entity!.DisplayName}' powered off");
+        SetPower(name, false, includeConnectorDocked);
     }
 
-    [Command("poweron", "Power on entities with the given text in their name.")]
+    [Command("poweron", "Turns on every power-producing block (reactors, batteries, solar, wind, engines, ...) on a grid and everything attached by rotors, hinges and pistons. Usage: poweron <grid> [includeConnectorDocked]")]
     [Permission(MyPromoteLevel.SpaceMaster)]
-    public void PowerOn(string name)
+    public void PowerOn(string name, bool includeConnectorDocked = false)
+    {
+        SetPower(name, true, includeConnectorDocked);
+    }
+
+    private void SetPower(string name, bool enabled, bool includeConnectorDocked)
     {
         if (string.IsNullOrEmpty(name))
             return;
@@ -237,22 +222,29 @@ public class EntityModule : CommandModule
             return;
         }
 
-        if (entity is IMyCharacter)
+        if (entity is not MyCubeGrid grid)
         {
-            Context.Respond("Command do not work on characters.");
+            Context.Respond($"'{entity!.DisplayName}' is not a grid.");
             return;
         }
-        IMyCubeGrid? grid = entity as MyCubeGrid;
-        var blocks = new List<IMySlimBlock>();
-        grid?.GetBlocks(blocks, f => f.FatBlock is IMyFunctionalBlock && (f.FatBlock.BlockDefinition.TypeId == typeof(MyObjectBuilder_Reactor) 
-                                                                          || f.FatBlock.BlockDefinition.TypeId == typeof(MyObjectBuilder_BatteryBlock) 
-                                                                          || f.FatBlock.BlockDefinition.TypeId == typeof(MyObjectBuilder_SolarPanel)));
-        var list = blocks.Select(f => (IMyFunctionalBlock)f.FatBlock).Where(f => !f.Enabled).ToArray();
-        foreach (var item in list)
+
+        var grids = GridFinder.GetGroup(grid, includeConnectorDocked ? GridLinkTypeEnum.Physical : GridLinkTypeEnum.Mechanical);
+        int changed = 0;
+        foreach (var block in grids.SelectMany(g => g.GetFatBlocks<MyFunctionalBlock>()))
         {
-            item.Enabled = true;
+            // Any block that produces electricity, so modded and newer power blocks are included.
+            var source = block.Components.Get<MyResourceSourceComponent>();
+            if (source == null || !source.ResourceTypes.Contains(MyResourceDistributorComponent.ElectricityId))
+                continue;
+
+            if (block.Enabled == enabled)
+                continue;
+
+            block.Enabled = enabled;
+            changed++;
         }
-        Context.Respond($"Entity '{entity!.DisplayName}' powered on");
+
+        Context.Respond($"Turned {(enabled ? "on" : "off")} {changed} power block(s) on {grids.Count} grid(s) of '{grid.DisplayName}'.");
     }
 
     [Command("eject", "Ejects a specific player from any block they are seated in, or all players in the server if run with 'all'")]

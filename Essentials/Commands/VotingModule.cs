@@ -57,7 +57,7 @@ public class VotingModule : CommandModule
         }
 
         _command = EssentialsPlugin.Instance.Config.AutoCommands.FirstOrDefault(c => !string.IsNullOrEmpty(c.Name) 
-                                                                                     && c.CommandTrigger == Trigger.Vote && c.Name.Equals(name));
+                                                                                     && c.CommandTrigger == Trigger.Vote && c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
         if (_command == null)
         {
@@ -84,21 +84,24 @@ public class VotingModule : CommandModule
         // voting status
         _voteInProgress = name;
         VoteStatus = Status.VoteInProgress;
+        _secondsLeft = (int)voteDuration.TotalSeconds;
+        int voteId = Interlocked.Increment(ref _nextVoteId);
+        Volatile.Write(ref _activeVoteId, voteId);
         VoteYes();
         var sb = new StringBuilder();
         sb.AppendLine($"Voting started for {name} by {Context.Player.DisplayName}.");
         sb.AppendLine("Use !yes to vote and !no to retract your vote");
         ModCommunication.SendMessageToClients(new NotificationMessage(sb.ToString(), 15000, "Blue"));
-        //vote countdown
-        Task.Run(() =>
+
+        // The background task only waits. Each tick runs on the game thread, where !yes and !no also run,
+        // so the vote state is never touched from two threads.
+        Task.Run(async () =>
         {
-            var countdown = VoteCountdown(voteDuration).GetEnumerator();
-            using (countdown as IDisposable)
+            while (Volatile.Read(ref _activeVoteId) == voteId)
             {
-                while (countdown.MoveNext()) 
-                    Thread.Sleep(1000);
+                await Task.Delay(1000);
+                EssentialsPlugin.Instance.Torch.Invoke(() => CountdownTick(voteId));
             }
-                
         });
 
         _lastVoteName = _voteInProgress;
@@ -228,72 +231,69 @@ public class VotingModule : CommandModule
         _voteResult = Status.VoteStandby;
         _voteResultPercentage = 0;
         Context.Respond("Vote reset successful");
-        Log.Info($"Voting module reset by {Context.Player.DisplayName}");
+        Log.Info($"Voting module reset by {Context.Player?.DisplayName ?? "Console"}");
     }
 
-    //vote countdown
-    private IEnumerable VoteCountdown(TimeSpan time)
+    private static int _secondsLeft;
+    private static int _nextVoteId;
+    private static int _activeVoteId;
+
+    // One second of the vote countdown. Runs on the game thread.
+    private static void CountdownTick(int voteId)
     {
-        for (var i = time.TotalSeconds; i >= 0; i--)
+        if (voteId != _activeVoteId)
+            return;
+
+        var chat = EssentialsPlugin.Instance.Torch.CurrentSession?.Managers?.GetManager<IChatManagerServer>();
+
+        if (VoteStatus != Status.VoteInProgress || VoteReg.Count < 1)
         {
-            if (VoteStatus != Status.VoteInProgress || VoteReg.Count < 1)
-            {
-                Context.Torch.CurrentSession.Managers.GetManager<IChatManagerClient>()
-                    .SendMessageAsSelf($"Vote for {_voteInProgress} cancelled");
-                _voteResult = Status.VoteCancel;
-                VoteEnd();
-                yield break;
-            }
-
-            if (i >= 60 && i % 60 == 0)
-            {
-                Context.Torch.CurrentSession.Managers.GetManager<IChatManagerClient>()
-                    .SendMessageAsSelf($"Voting for {_voteInProgress} ends in {i / 60} minute{Pluralize(i / 60)}.");
-                yield return null;
-            }
-
-            else if (i > 0)
-            {
-                if (i < 11)
-                    Context.Torch.CurrentSession.Managers.GetManager<IChatManagerClient>()
-                        .SendMessageAsSelf($"Voting for {_voteInProgress} ends in {i} second{Pluralize(i)}.");
-                yield return null;
-            }
-            else
-            {
-                double vr = (double)VoteReg.Count / Utilities.GetOnlinePlayerCount();
-                if (vr >= _command?.TriggerRatio)
-                {
-                    Context.Torch.CurrentSession.Managers.GetManager<IChatManagerClient>()
-                        .SendMessageAsSelf($"Vote for {_voteInProgress} is successful");
-                    _voteResult = Status.VoteSuccess;
-                    _command.RunNow();
-                }
-                else if (vr < _command?.TriggerRatio)
-                {
-                    Context.Torch.CurrentSession.Managers.GetManager<IChatManagerClient>()
-                        .SendMessageAsSelf($"Vote for {_voteInProgress} failed");
-                    _voteResult = Status.VoteFail;
-                }
-
-                _voteResultPercentage = vr * 100;
-                VoteEnd();
-                yield break;
-            }
+            chat?.SendMessageAsSelf($"Vote for {_voteInProgress} cancelled");
+            _voteResult = Status.VoteCancel;
+            VoteEnd();
+            return;
         }
+
+        int i = _secondsLeft--;
+
+        if (i > 0)
+        {
+            if (i >= 60 && i % 60 == 0)
+                chat?.SendMessageAsSelf($"Voting for {_voteInProgress} ends in {i / 60} minute{Pluralize(i / 60)}.");
+            else if (i < 11)
+                chat?.SendMessageAsSelf($"Voting for {_voteInProgress} ends in {i} second{Pluralize(i)}.");
+            return;
+        }
+
+        int online = Utilities.GetOnlinePlayerCount();
+        double vr = online == 0 ? 0 : (double)VoteReg.Count / online;
+        if (_command != null && vr >= _command.TriggerRatio)
+        {
+            chat?.SendMessageAsSelf($"Vote for {_voteInProgress} is successful");
+            _voteResult = Status.VoteSuccess;
+            _command.RunNow();
+        }
+        else
+        {
+            chat?.SendMessageAsSelf($"Vote for {_voteInProgress} failed");
+            _voteResult = Status.VoteFail;
+        }
+
+        _voteResultPercentage = vr * 100;
+        VoteEnd();
     }
 
-
-    public void VoteEnd()
+    public static void VoteEnd()
     {
         //Make sure it's all good for next round
+        Volatile.Write(ref _activeVoteId, 0);
         _command = null;
         VoteStatus = Status.VoteStandby;
         _voteInProgress = null;
         VoteReg.Clear();
     }
 
-    private string Pluralize(double num)
+    private static string Pluralize(double num)
     {
         return num == 1 ? "" : "s";
     }

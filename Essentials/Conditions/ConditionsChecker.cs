@@ -2,8 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
 using Essentials.Conditions;
+using NLog;
 using Sandbox.Game.Entities;
 using Torch.Commands;
 
@@ -11,12 +11,13 @@ namespace Essentials.Commands;
 
 public static class ConditionsChecker
 {
+    private static readonly Logger Log = LogManager.GetLogger("Essentials");
     private static List<Condition> _conditionLookup = [];
 
     public static void Init()
     {
         _conditionLookup.Clear();
-                
+
         var types = AppDomain.CurrentDomain.GetAssemblies()
             .SelectMany((x) =>
             {
@@ -24,7 +25,7 @@ public static class ConditionsChecker
                 {
                     return x.GetTypes();
                 }
-                catch (Exception) // ignored 
+                catch (Exception) // ignored
                 {
                     return Type.EmptyTypes;
                 }
@@ -50,16 +51,20 @@ public static class ConditionsChecker
     {
         return _conditionLookup;
     }
-        
+
+    /// <summary>
+    /// Returns every grid of each mechanical group that matches all given conditions.
+    /// Any unknown condition or invalid value aborts the scan and returns no grids.
+    /// </summary>
     public static IEnumerable<MyCubeGrid> ScanConditions(CommandContext context, IReadOnlyList<string> args)
     {
-        var conditions = new List<Func<MyCubeGrid, bool?>>();
+        var conditions = new List<Func<IReadOnlyList<MyCubeGrid>, bool>>();
 
         for (var i = 0; i < args.Count; i++)
         {
             string? parameter;
-            parameter = i + 1 >= args.Count 
-                ? null 
+            parameter = i + 1 >= args.Count
+                ? null
                 : args[i + 1];
 
             var arg = args[i];
@@ -76,79 +81,51 @@ public static class ConditionsChecker
                     i++;
             }
 
-            bool found = false;
-
-            foreach (var condition in _conditionLookup)
+            var condition = _conditionLookup.FirstOrDefault(c => arg.Equals(c.Command, StringComparison.CurrentCultureIgnoreCase));
+            var invert = false;
+            if (condition == null)
             {
-                if (arg.Equals(condition.Command, StringComparison.CurrentCultureIgnoreCase))
-                {
-                    conditions.Add(g => condition.Evaluate(g, parameter, false, context));
-                    found = true;
-                    break;
-                }
-                else if (arg.Equals(condition.InvertCommand, StringComparison.CurrentCultureIgnoreCase))
-                {
-                    conditions.Add(g => condition.Evaluate(g, parameter, true, context));
-                    found = true;
-                    break;
-                }
+                condition = _conditionLookup.FirstOrDefault(c => arg.Equals(c.InvertCommand, StringComparison.CurrentCultureIgnoreCase));
+                invert = true;
             }
-            if (!found)
+
+            if (condition == null)
             {
-                context.Respond($"Unknown argument '{arg}'");
+                context.Respond($"Unknown condition '{arg}'. Nothing was matched.");
                 return new List<MyCubeGrid>();
             }
+
+            if (!condition.TryPrepare(parameter, out object? value, out string? error))
+            {
+                context.Respond($"{error} Nothing was matched.");
+                return new List<MyCubeGrid>();
+            }
+
+            conditions.Add(group => condition.EvaluateGroup(group, value, invert));
         }
 
         //default scan to find grids without pilots
         if (!args.Contains("haspilot", StringComparer.CurrentCultureIgnoreCase))
-            conditions.Add(g => !ConditionsImplementations.Piloted(g));
-
+            conditions.Add(group => !group.Any(ConditionsImplementations.Piloted));
 
         var resultList = new List<MyCubeGrid>();
-            
-        Dictionary<long, List<MyCubeGrid>> findResult = GridFinder.GetAllGrids();
-        foreach (var kvp in findResult)
+
+        try
         {
-            bool res = true;
-            foreach (MyCubeGrid cubeGrid in kvp.Value)
+            foreach (var group in GridFinder.GetAllGrids().Values)
             {
-                foreach (Func<MyCubeGrid, bool?> condition in conditions)
-                {
-                    bool? result = condition?.Invoke(cubeGrid);
-                    if (result == null)
-                    {
-                        continue;
-                    }
-                    
-                    if (result == true)
-                    {
-                        continue;
-                    }
-                    
-                    res = false;
-                    break;
-                }
-                
-                if (!res)
-                {
-                    break;
-                }
+                if (conditions.All(condition => condition(group)))
+                    resultList.AddRange(group);
             }
-            
-            if (res)
-            {
-                lock (resultList)
-                {
-                    foreach (var grid in kvp.Value)
-                    {
-                        resultList.Add(grid);
-                    }
-                }
-            }
+        }
+        catch (Exception e)
+        {
+            var reason = e.GetBaseException().Message;
+            Log.Error(e, "Condition evaluation failed");
+            context.Respond($"Condition check failed: {reason} Nothing was matched.");
+            return new List<MyCubeGrid>();
         }
 
         return resultList;
     }
-        
 }

@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+﻿using System;
 using System.Linq;
 using Sandbox.Game;
 using Sandbox.Game.World;
@@ -28,11 +28,23 @@ public class InfoModule:CommandModule
 
     private static void MessageProcessing(TorchChatMessage msg, ref bool consumed)
     {
-        ObservableCollection<InfoCommand>? infoCommands = EssentialsPlugin.Instance.Config.InfoCommands;
-        if (infoCommands.Count == 0)
+        InfoCommand[] infoCommands;
+        try
+        {
+            // Snapshot, since the UI can edit the list at any time.
+            infoCommands = EssentialsPlugin.Instance.Config.InfoCommands.ToArray();
+        }
+        catch (Exception)
+        {
+            return;
+        }
+
+        if (infoCommands.Length == 0)
             return;
 
-        var c = infoCommands.FirstOrDefault(i => i.Command?.Equals(msg.Message) == true);
+        var text = msg.Message?.Trim();
+        var c = infoCommands.FirstOrDefault(i => !string.IsNullOrWhiteSpace(i.Command)
+                                                 && string.Equals(i.Command!.Trim(), text, StringComparison.OrdinalIgnoreCase));
         if (c == null)
             return;
 

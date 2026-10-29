@@ -14,11 +14,28 @@ namespace Essentials;
 
 public static class Utilities
 {
+    private const string TypePrefix = "MyObjectBuilder_";
+
+    /// <summary>
+    /// Strips the "MyObjectBuilder_" prefix so "Reactor" and "MyObjectBuilder_Reactor" compare equal.
+    /// </summary>
+    public static string NormalizeTypeName(string typeName)
+    {
+        typeName = typeName.Trim();
+        return typeName.StartsWith(TypePrefix, StringComparison.OrdinalIgnoreCase)
+            ? typeName.Substring(TypePrefix.Length)
+            : typeName;
+    }
+
+    public static bool IsBlockType(MyObjectBuilderType typeId, string typeName)
+    {
+        return string.Equals(NormalizeTypeName(typeId.ToString()), NormalizeTypeName(typeName), StringComparison.OrdinalIgnoreCase);
+    }
+
     public static bool HasBlockType(this IMyCubeGrid grid, string typeName)
     {
         foreach (var block in ((MyCubeGrid)grid).GetFatBlocks())
-
-            if (string.Compare(block.BlockDefinition.Id.TypeId.ToString().Substring(16), typeName, StringComparison.InvariantCultureIgnoreCase) == 0)
+            if (IsBlockType(block.BlockDefinition.Id.TypeId, typeName))
                 return true;
 
         return false;
@@ -86,6 +103,18 @@ public static class Utilities
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Removes pilots from a grid before it is deleted, so their characters are not deleted with it.
+    /// </summary>
+    public static void EjectPilots(MyCubeGrid grid)
+    {
+        foreach (var cockpit in grid.GetFatBlocks<MyCockpit>().ToList())
+        {
+            if (cockpit.Pilot != null)
+                cockpit.RemovePilot();
+        }
     }
 
     public static bool TryGetEntityByNameOrId(string nameOrId, out IMyEntity? entity)

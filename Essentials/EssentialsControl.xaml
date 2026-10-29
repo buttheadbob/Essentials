@@ -49,6 +49,73 @@
                 <x:Type TypeName="local:CleanupConditionType"/>
             </ObjectDataProvider.MethodParameters>
         </ObjectDataProvider>
+        <ObjectDataProvider x:Key="RuleAccessValues" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="local:RuleAccess"/>
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
+
+        <local:TriggerVisibilityConverter x:Key="TriggerVisible"/>
+        <local:TriggerDescriptionConverter x:Key="TriggerDescription"/>
+
+        <!-- Shows the validation message (for example a bad HH:MM:SS value) when hovering a field with an error. -->
+        <Style TargetType="TextBox">
+            <Style.Triggers>
+                <Trigger Property="Validation.HasError" Value="True">
+                    <Setter Property="ToolTip" Value="{Binding RelativeSource={RelativeSource Self}, Path=(Validation.Errors)/ErrorContent}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Detail panels are hidden until something is selected in the list. -->
+        <Style x:Key="DetailPanel" TargetType="ScrollViewer">
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding}" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="EmptyHint" TargetType="TextBlock">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Setter Property="Foreground" Value="Gray"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Text" Value="Select an item on the left, or click + Add to create one."/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding}" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Yellow banner shown when the bound text is not empty. -->
+        <Style x:Key="WarningBanner" TargetType="Border">
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Background" Value="#FFFFF4CE"/>
+            <Setter Property="BorderBrush" Value="#FFE0B000"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8"/>
+            <Setter Property="Margin" Value="5,0,5,8"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Small warning sign in list items, shown when the bound text is not empty. -->
+        <Style x:Key="WarningIcon" TargetType="TextBlock">
+            <Setter Property="Text" Value="⚠ "/>
+            <Setter Property="Foreground" Value="#FFC08000"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -149,7 +216,9 @@
                     </DockPanel>
 
                     <!-- Right: Detail -->
-                    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
+                    <TextBlock Grid.Column="1" Style="{StaticResource EmptyHint}"
+                               DataContext="{Binding SelectedItem, ElementName=SimSpeedEventsList}"/>
+                    <ScrollViewer Grid.Column="1" Style="{StaticResource DetailPanel}"
                                   DataContext="{Binding SelectedItem, ElementName=SimSpeedEventsList}">
                         <StackPanel>
                             <GroupBox Header="Trigger Settings">
@@ -184,10 +253,10 @@
                                     <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding TriggerRatio, UpdateSourceTrigger=LostFocus}" Margin="5"/>
 
                                     <TextBlock Grid.Row="3" Grid.Column="0" Text="Duration" ToolTip="How long sim speed must continuously stay past the threshold before the command fires. Format: HH:MM:SS" Margin="5" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding SimSpeedDuration, UpdateSourceTrigger=LostFocus}" Margin="5"/>
+                                    <TextBox Grid.Row="3" Grid.Column="1" Text="{local:TimeSpanBinding SimSpeedDuration}" Margin="5"/>
 
                                     <TextBlock Grid.Row="4" Grid.Column="0" Text="Cooldown" ToolTip="Minimum time between consecutive fires. Format: HH:MM:SS" Margin="5" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding SimSpeedCooldown, UpdateSourceTrigger=LostFocus}" Margin="5"/>
+                                    <TextBox Grid.Row="4" Grid.Column="1" Text="{local:TimeSpanBinding SimSpeedCooldown}" Margin="5"/>
 
                                     <TextBlock Grid.Row="5" Grid.Column="0" Text="Enable Hysteresis" ToolTip="Adds a second threshold for recovery. See info below for details." Margin="5" VerticalAlignment="Center"/>
                                     <CheckBox Grid.Row="5" Grid.Column="1" IsChecked="{Binding HysteresisEnabled}" Margin="5" VerticalAlignment="Center"/>
@@ -195,7 +264,7 @@
                                     <TextBlock Grid.Row="6" Grid.Column="0" Text="Recovery Ratio" ToolTip="Sim speed must recover past this value (opposite direction) before re-arming." Margin="5" VerticalAlignment="Center"/>
                                     <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding HysteresisRatio, UpdateSourceTrigger=LostFocus}" Margin="5">
                                         <TextBox.Style>
-                                            <Style TargetType="TextBox">
+                                            <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding HysteresisEnabled}" Value="False">
                                                         <Setter Property="IsEnabled" Value="False"/>
@@ -207,7 +276,7 @@
 
                                     <Border Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" CornerRadius="5" Background="#FFF0F4FF" Padding="8" Margin="5,8,5,2">
                                         <TextBlock TextWrapping="Wrap" Foreground="#FF333366" FontSize="11">
-                                            Hysteresis prevents rapid re-triggering when sim speed hovers near the threshold. When enabled, after firing, sim speed must recover past the Recovery Ratio (in the opposite direction) before the event can arm again. Hysteresis is opt-in — leave it off unless you are experiencing repeated triggers from sim speed fluctuation.
+                                            Hysteresis prevents rapid re-triggering when sim speed hovers near the threshold. When enabled, after firing, sim speed must recover past the Recovery Ratio (in the opposite direction) before the event can arm again. A recovery during the cooldown counts; the cooldown only delays the next fire. Hysteresis is opt-in — leave it off unless you are experiencing repeated triggers from sim speed fluctuation.
                                         </TextBlock>
                                     </Border>
                                 </Grid>
@@ -247,7 +316,7 @@
                                             <DataGridTemplateColumn Header="Delay (HH:MM:SS)" Width="130">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
-                                                        <TextBox Text="{Binding Delay, UpdateSourceTrigger=LostFocus}" VerticalAlignment="Center" BorderThickness="0" Background="Transparent"/>
+                                                        <TextBox Text="{local:TimeSpanBinding Delay}" VerticalAlignment="Center" BorderThickness="0" Background="Transparent"/>
                                                     </DataTemplate>
                                                 </DataGridTemplateColumn.CellTemplate>
                                             </DataGridTemplateColumn>
@@ -285,46 +354,97 @@
                     </DockPanel>
 
                     <!-- Right: Detail -->
-                    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
+                    <TextBlock Grid.Column="1" Style="{StaticResource EmptyHint}"
+                               DataContext="{Binding SelectedItem, ElementName=AutoCommandsList}"/>
+                    <ScrollViewer Grid.Column="1" Style="{StaticResource DetailPanel}"
                                   DataContext="{Binding SelectedItem, ElementName=AutoCommandsList}">
                         <StackPanel>
                             <GroupBox Header="Command Settings">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="130"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
+                                <!-- Each row is only shown for the triggers that use it. -->
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="170"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Name" ToolTip="Used with !admin runauto, !admin cancelauto and !vote." Margin="5" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Margin="5"/>
+                                    </Grid>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Name" Margin="5" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Margin="5"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="170"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Trigger" Margin="5" VerticalAlignment="Center"/>
+                                        <ComboBox Grid.Column="1" ItemsSource="{Binding AutoTriggers, ElementName=Root}" SelectedItem="{Binding CommandTrigger}" Margin="5"/>
+                                    </Grid>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Interval" ToolTip="Format: HH:MM:SS" Margin="5" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Interval, UpdateSourceTrigger=LostFocus}" Margin="5"/>
+                                    <Grid Visibility="{Binding CommandTrigger, Converter={StaticResource TriggerVisible}, ConverterParameter=Timed}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="170"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Repeat every (HH:MM:SS)" Margin="5" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Column="1" Text="{local:TimeSpanBinding Interval}" Margin="5"/>
+                                    </Grid>
 
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Trigger" Margin="5" VerticalAlignment="Center"/>
-                                    <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding Source={StaticResource TriggerValues}}" SelectedItem="{Binding CommandTrigger}" Margin="5"/>
+                                    <Grid Visibility="{Binding CommandTrigger, Converter={StaticResource TriggerVisible}, ConverterParameter=Scheduled}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="170"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Time of day (HH:MM:SS)" ToolTip="Server time. Example: 04:30:00 runs at 4:30 AM." Margin="5" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Column="1" Text="{local:TimeSpanBinding Interval}" Margin="5"/>
+                                        <TextBlock Grid.Row="1" Text="Day of week" Margin="5" VerticalAlignment="Center"/>
+                                        <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Source={StaticResource DayOfWeekValues}}" SelectedItem="{Binding DayOfWeek}" Margin="5"/>
+                                    </Grid>
 
-                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Trigger Count" ToolTip="Only use with GridCount or PlayerCount triggers." Margin="5" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding TriggerCount, UpdateSourceTrigger=LostFocus}" Margin="5"/>
+                                    <Grid Visibility="{Binding CommandTrigger, Converter={StaticResource TriggerVisible}, ConverterParameter='GridCount,PlayerCount'}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="170"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Check every (HH:MM:SS)" ToolTip="How often the count is checked. Also the minimum time between runs." Margin="5" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Column="1" Text="{local:TimeSpanBinding Interval}" Margin="5"/>
+                                        <TextBlock Grid.Row="1" Text="Run when the count is" Margin="5" VerticalAlignment="Center"/>
+                                        <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Source={StaticResource GtlValues}}" SelectedItem="{Binding Compare}" Margin="5"/>
+                                        <TextBlock Grid.Row="2" Text="Count" Margin="5" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding TriggerCount, UpdateSourceTrigger=LostFocus}" Margin="5"/>
+                                    </Grid>
 
-                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Trigger Ratio" ToolTip="Ratio for SimSpeed or Vote trigger. 0.5 = 50%" Margin="5" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding TriggerRatio, UpdateSourceTrigger=LostFocus}" Margin="5"/>
+                                    <Grid Visibility="{Binding CommandTrigger, Converter={StaticResource TriggerVisible}, ConverterParameter=Vote}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="170"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Vote length (HH:MM:SS)" Margin="5" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Column="1" Text="{local:TimeSpanBinding Interval}" Margin="5"/>
+                                        <TextBlock Grid.Row="1" Text="Yes votes needed (0 - 1)" ToolTip="Share of online players who must vote yes. 0.5 = 50%." Margin="5" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding TriggerRatio, UpdateSourceTrigger=LostFocus}" Margin="5"/>
+                                        <TextBlock Grid.Row="2" Text="Cooldown per player (sec)" ToolTip="How long a player must wait before starting another vote." Margin="5" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding TriggerCount, UpdateSourceTrigger=LostFocus}" Margin="5"/>
+                                    </Grid>
 
-                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Operator" Margin="5" VerticalAlignment="Center"/>
-                                    <ComboBox Grid.Row="5" Grid.Column="1" ItemsSource="{Binding Source={StaticResource GtlValues}}" SelectedItem="{Binding Compare}" Margin="5"/>
-
-                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Day of Week" Margin="5" VerticalAlignment="Center"/>
-                                    <ComboBox Grid.Row="6" Grid.Column="1" ItemsSource="{Binding Source={StaticResource DayOfWeekValues}}" SelectedItem="{Binding DayOfWeek}" Margin="5"/>
-                                </Grid>
+                                    <Border CornerRadius="5" Background="#FFF0F4FF" Padding="8" Margin="5,8,5,2">
+                                        <TextBlock TextWrapping="Wrap" Foreground="#FF333366" FontSize="11"
+                                                   Text="{Binding CommandTrigger, Converter={StaticResource TriggerDescription}}"/>
+                                    </Border>
+                                </StackPanel>
                             </GroupBox>
 
                             <GroupBox Header="Steps">
@@ -361,7 +481,7 @@
                                             <DataGridTemplateColumn Header="Delay (HH:MM:SS)" Width="130">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
-                                                        <TextBox Text="{Binding Delay, UpdateSourceTrigger=LostFocus}" VerticalAlignment="Center" BorderThickness="0" Background="Transparent"/>
+                                                        <TextBox Text="{local:TimeSpanBinding Delay}" VerticalAlignment="Center" BorderThickness="0" Background="Transparent"/>
                                                     </DataTemplate>
                                                 </DataGridTemplateColumn.CellTemplate>
                                             </DataGridTemplateColumn>
@@ -416,14 +536,27 @@
                             <Button Content="- Remove" Click="RemoveBlockList_OnClick" Margin="5" Padding="10,3"/>
                         </StackPanel>
                         <ListBox x:Name="BlockListsList"
-                                 ItemsSource="{Binding BlockLists}"
-                                 DisplayMemberPath="Name"/>
+                                 ItemsSource="{Binding BlockLists}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" ToolTip="{Binding Problem}">
+                                        <TextBlock Style="{StaticResource WarningIcon}" Tag="{Binding Problem}"/>
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
                     </DockPanel>
 
                     <!-- Right: Detail -->
-                    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
+                    <TextBlock Grid.Column="1" Style="{StaticResource EmptyHint}"
+                               DataContext="{Binding SelectedItem, ElementName=BlockListsList}"/>
+                    <ScrollViewer Grid.Column="1" Style="{StaticResource DetailPanel}"
                                   DataContext="{Binding SelectedItem, ElementName=BlockListsList}">
                         <StackPanel>
+                            <Border Style="{StaticResource WarningBanner}" Tag="{Binding Problem}">
+                                <TextBlock TextWrapping="Wrap" Text="{Binding Problem, StringFormat='This preset will not run: {0}'}"/>
+                            </Border>
                             <GroupBox Header="Preset Settings">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -465,7 +598,7 @@
                                                 </DataGridTemplateColumn.CellTemplate>
                                             </DataGridTemplateColumn>
                                             <DataGridTextColumn Header="Value" Binding="{Binding Value, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
-                                            <DataGridTextColumn Header="Delay (HH:MM:SS)" Binding="{Binding Delay, UpdateSourceTrigger=LostFocus}" Width="130"/>
+                                            <DataGridTextColumn Header="Delay (HH:MM:SS)" Binding="{local:TimeSpanBinding Delay}" Width="130"/>
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </DockPanel>
@@ -500,6 +633,7 @@
 
                             <Border CornerRadius="5" Background="#FFE8E8E8" Padding="8" Margin="5,8,5,2">
                                 <TextBlock TextWrapping="Wrap" Foreground="#FF333333" FontSize="11">
+                                    Values: a Type can be written with or without the MyObjectBuilder_ prefix (Reactor or MyObjectBuilder_Reactor). Values and parameters containing spaces are quoted for you.
                                     To run this preset, type !admin runpreset followed by the preset name in the server console or in-game chat. For example: !admin runpreset "My Preset". You can also use this command inside Auto Command steps to run presets on a schedule.
                                 </TextBlock>
                             </Border>
@@ -523,14 +657,27 @@
                             <Button Content="- Remove" Click="RemoveCleanupPreset_OnClick" Margin="5" Padding="10,3"/>
                         </StackPanel>
                         <ListBox x:Name="CleanupPresetsList"
-                                 ItemsSource="{Binding CleanupPresets}"
-                                 DisplayMemberPath="Name"/>
+                                 ItemsSource="{Binding CleanupPresets}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" ToolTip="{Binding Problem}">
+                                        <TextBlock Style="{StaticResource WarningIcon}" Tag="{Binding Problem}"/>
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
                     </DockPanel>
 
                     <!-- Right: Detail -->
-                    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
+                    <TextBlock Grid.Column="1" Style="{StaticResource EmptyHint}"
+                               DataContext="{Binding SelectedItem, ElementName=CleanupPresetsList}"/>
+                    <ScrollViewer Grid.Column="1" Style="{StaticResource DetailPanel}"
                                   DataContext="{Binding SelectedItem, ElementName=CleanupPresetsList}">
                         <StackPanel>
+                            <Border Style="{StaticResource WarningBanner}" Tag="{Binding Problem}">
+                                <TextBlock TextWrapping="Wrap" Text="{Binding Problem, StringFormat='This preset will not run: {0}'}"/>
+                            </Border>
                             <GroupBox Header="Preset Settings">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -585,7 +732,7 @@
                                                 </DataGridTemplateColumn.CellTemplate>
                                             </DataGridTemplateColumn>
                                             <DataGridTextColumn Header="Parameter" Binding="{Binding Parameter, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
-                                            <DataGridTextColumn Header="Delay (HH:MM:SS)" Binding="{Binding Delay, UpdateSourceTrigger=LostFocus}" Width="130"/>
+                                            <DataGridTextColumn Header="Delay (HH:MM:SS)" Binding="{local:TimeSpanBinding Delay}" Width="130"/>
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </DockPanel>
@@ -620,6 +767,7 @@
 
                             <Border CornerRadius="5" Background="#FFE8E8E8" Padding="8" Margin="5,8,5,2">
                                 <TextBlock TextWrapping="Wrap" Foreground="#FF333333" FontSize="11">
+                                    Conditions are checked against each ship as a whole, including everything attached by rotors, hinges and pistons. If any condition is wrong or missing its parameter, nothing is deleted.
                                     To run this preset, type !admin runcleanup followed by the preset name in the server console or in-game chat. For example: !admin runcleanup "Dead Grids". You can also use this command inside Auto Command steps to run cleanup on a schedule.
                                 </TextBlock>
                             </Border>
@@ -628,7 +776,141 @@
                 </Grid>
             </TabItem>
 
-            <!-- TAB 8: Instructions -->
+            <!-- TAB 8: Command Permissions -->
+            <TabItem Header="Command Permissions">
+                <DockPanel Margin="10">
+                    <Border DockPanel.Dock="Top" CornerRadius="5" Background="#FFF0F4FF" Padding="8" Margin="5,0,5,8">
+                        <StackPanel>
+                            <CheckBox IsChecked="{Binding EnableCommandPermissions}" FontWeight="Bold" Content="Enable Command Permissions"/>
+                            <TextBlock TextWrapping="Wrap" Foreground="#FF333366" FontSize="11" Margin="20,4,0,0">
+                                Give specific players access to specific commands, or block them, regardless of their in-game rank. Players not listed here use normal in-game permissions. Server console commands are never affected.
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="220"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Left: Players -->
+                        <DockPanel Grid.Column="0" Margin="0,0,5,0">
+                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
+                                <Button Content="+ Add Player" Click="AddPlayerPermission_OnClick" Margin="5" Padding="10,3"/>
+                                <Button Content="- Remove" Click="RemovePlayerPermission_OnClick" Margin="5" Padding="10,3"/>
+                            </StackPanel>
+                            <ListBox x:Name="PlayerPermissionsList" ItemsSource="{Binding PlayerPermissions}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,2" ToolTip="{Binding Warning}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource WarningIcon}" Tag="{Binding Warning}"/>
+                                                <TextBlock Text="{Binding PlayerName}" FontWeight="Bold"/>
+                                            </StackPanel>
+                                            <TextBlock FontSize="10" Foreground="Gray">
+                                                <Run Text="{Binding SteamId, Mode=OneWay}"/>
+                                                <Run Text=" · "/>
+                                                <Run Text="{Binding Rules.Count, Mode=OneWay}"/>
+                                                <Run Text=" rule(s)"/>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+
+                        <!-- Right: Detail -->
+                        <TextBlock Grid.Column="1" Style="{StaticResource EmptyHint}" Text="Select a player on the left, or click + Add Player."
+                                   DataContext="{Binding SelectedItem, ElementName=PlayerPermissionsList}"/>
+                        <ScrollViewer Grid.Column="1" Style="{StaticResource DetailPanel}"
+                                      DataContext="{Binding SelectedItem, ElementName=PlayerPermissionsList}">
+                            <StackPanel>
+                                <Border Style="{StaticResource WarningBanner}" Tag="{Binding Warning}">
+                                    <TextBlock TextWrapping="Wrap" Text="{Binding Warning}"/>
+                                </Border>
+                                <GroupBox Header="Player">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Pick online player" ToolTip="Fills in the name and Steam ID from a player who is currently connected." Margin="5" VerticalAlignment="Center"/>
+                                        <ComboBox Grid.Row="0" Grid.Column="1" Margin="5"
+                                                  ItemsSource="{Binding OnlinePlayers, ElementName=Root}"
+                                                  DisplayMemberPath="Display"
+                                                  DropDownOpened="OnlinePlayers_OnDropDownOpened"
+                                                  SelectionChanged="OnlinePlayers_OnSelectionChanged"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Name" ToolTip="A label so you can recognise this player. Only the Steam ID is used for matching." Margin="5" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding PlayerName, UpdateSourceTrigger=PropertyChanged}" Margin="5"/>
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Steam ID" ToolTip="The player's 17-digit Steam ID. This is what permissions are matched against." Margin="5" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding SteamId, UpdateSourceTrigger=LostFocus}" Margin="5"/>
+                                    </Grid>
+                                </GroupBox>
+
+                                <GroupBox Header="Command Rules">
+                                    <DockPanel>
+                                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
+                                            <Button Content="+ Add Rule" Click="AddCommandRule_OnClick" Margin="5" Padding="10,3"/>
+                                            <Button Content="- Remove Rule" Click="RemoveCommandRule_OnClick" Margin="5" Padding="10,3"/>
+                                        </StackPanel>
+                                        <Border DockPanel.Dock="Bottom" CornerRadius="5" Background="#FFE8E8E8" Padding="8" Margin="5,8,5,2">
+                                            <TextBlock TextWrapping="Wrap" Foreground="#FF333333" FontSize="11">
+                                                Type a command without the "!" or pick one from the list (the list fills in while the server is running). A rule also covers everything under it: "grids" covers "grids list", "grids setowner" and so on. Use "*" for every command. When rules overlap, the most specific one wins, so you can Allow "grids" and Deny "grids setowner".
+                                            </TextBlock>
+                                        </Border>
+                                        <DataGrid x:Name="CommandRulesGrid"
+                                                  ItemsSource="{Binding Rules}"
+                                                  AutoGenerateColumns="False"
+                                                  CanUserAddRows="False"
+                                                  CanUserDeleteRows="False"
+                                                  MinHeight="50">
+                                            <DataGrid.Columns>
+                                                <DataGridTemplateColumn Header="Command" Width="*">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <ComboBox IsEditable="True"
+                                                                      ItemsSource="{Binding KnownCommands, RelativeSource={RelativeSource AncestorType=local:EssentialsControl}}"
+                                                                      DisplayMemberPath="Path"
+                                                                      TextSearch.TextPath="Path"
+                                                                      Text="{Binding Command, UpdateSourceTrigger=PropertyChanged}"
+                                                                      DropDownOpened="CommandBox_OnDropDownOpened">
+                                                                <ComboBox.ItemContainerStyle>
+                                                                    <Style TargetType="ComboBoxItem">
+                                                                        <Setter Property="ToolTip" Value="{Binding Description}"/>
+                                                                    </Style>
+                                                                </ComboBox.ItemContainerStyle>
+                                                            </ComboBox>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                                <DataGridTemplateColumn Header="Access" Width="100">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <ComboBox ItemsSource="{Binding Source={StaticResource RuleAccessValues}}"
+                                                                      SelectedItem="{Binding Access, UpdateSourceTrigger=PropertyChanged}"/>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </DockPanel>
+                                </GroupBox>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </DockPanel>
+            </TabItem>
+
+            <!-- TAB 9: Instructions -->
             <TabItem Header="Instructions">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="10">
@@ -648,6 +930,17 @@
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">!admin runcleanup &lt;name&gt; - Run a Cleanup Preset</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">!admin runauto &lt;name&gt; - Run an Auto Command</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">!admin cancelauto &lt;name&gt; - Cancel a running Auto Command</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">!identity clean &lt;days&gt; [includeNpcs] - Reset players inactive for that many days to a brand-new state (keeps the identity)</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">!identity purge &lt;days&gt; [includeNpcs] - Remove players inactive for that many days and everything they own</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">!identity clear &lt;player&gt; - Reset one player to a brand-new state (keeps the identity)</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="20,0,0,3" FontStyle="Italic">"Brand-new" means: grids they mostly own are deleted (their blocks on other players' ships are handed to that ship's owner), their offline character is removed, and they leave their faction and lose their GPS markers, reputation and credits. NPCs are skipped unless includeNpcs is true. Online players are never cleaned or purged by the day-based commands.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,10,0,8">
+                                        To let specific players use commands their in-game rank does not allow (or block commands they could otherwise use), see the Command Permissions tab.
+                                    </TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Status bar and Undo:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">The bar at the bottom of the window confirms what you just did. After removing anything (a preset, a step, a player, a rule...), click Undo there to put it back exactly where it was.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Time fields use HH:MM:SS. If a value cannot be read, the field turns red and the old value is kept; hover the field to see why.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">A ⚠ next to a preset or player means something needs attention. Select it to see what.</TextBlock>
                                 </StackPanel>
                             </TabItem>
 
@@ -689,9 +982,16 @@
                                     <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">How to set up an Auto Command:</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">1. Click "+ Add" to create a new command.</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">2. Give it a name so you can identify it later.</TextBlock>
-                                        <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">3. Set the Trigger to control when it runs (Timed = repeating interval, Scheduled = specific time of day).</TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">4. Set the Interval (format: HH:MM:SS). For Timed triggers, this is how often it repeats. For Scheduled triggers, this is the time of day.</TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">5. Add steps - each step is a command that runs in order. Set a Delay between steps if needed.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">3. Choose a Trigger. Only the settings that trigger uses are shown, with a short description underneath.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">4. Add steps - each step is a command that runs in order. The Delay is how long to wait after that step before running the next one.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Triggers:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Disabled - Never runs on its own. Can still be run with !admin runauto &lt;name&gt;.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Timed - Runs the steps, then waits Repeat Every before running them again.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Scheduled - Runs once a day at Time Of Day (server time), on the chosen day or every day.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">OnStart - Runs once, shortly after the server has finished starting.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">GridCount / PlayerCount - Every Check Every interval, compares the number of grids (or online players) to Count, and runs the steps when it matches. A new run does not start while the previous run of the same command is still going.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Vote - Players type !vote &lt;name&gt; to start a vote and !yes to vote for it. If the share of online players voting yes reaches Yes Votes Needed before Vote Length ends, the steps run. Each player must wait Cooldown Per Player seconds before starting another vote. !vote list shows the commands players can vote on.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Sim speed triggers have their own tab.</TextBlock>
                                     <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Reordering Steps:</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Use the ▲ ▼ buttons on each row, or select a step and press the Up/Down arrow keys on your keyboard.</TextBlock>
                                     <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Example - Restart Warning:</TextBlock>
@@ -733,7 +1033,7 @@
                                             <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">Minimum time between consecutive fires. Format: HH:MM:SS. Example: 00:10:00 means after the command fires, it cannot fire again for at least 10 minutes, regardless of sim speed. Prevents commands from running back-to-back during extended lag periods.</TextBlock>
 
                                             <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,4,0,2">Enable Hysteresis</TextBlock>
-                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">Opt-in feature that adds a recovery threshold. When enabled, after the command fires, sim speed must recover past the Recovery Ratio (in the opposite direction) before the event can arm again. This is the single best defense against repeated triggers when sim speed hovers near the threshold.</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">Opt-in feature that adds a recovery threshold. When enabled, after the command fires, sim speed must recover past the Recovery Ratio (in the opposite direction) before the event can arm again. A recovery during the cooldown counts; the cooldown only delays the next fire. This is the single best defense against repeated triggers when sim speed hovers near the threshold.</TextBlock>
 
                                             <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,4,0,2">Recovery Ratio</TextBlock>
                                             <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">Only active when Hysteresis is enabled. The sim speed value that serves as the recovery threshold, in the opposite direction of Compare. Example: Compare = LessThan, Threshold = 0.4, Recovery Ratio = 0.7 — sim must rise above 70% before re-arming. Leave at 0.7 (default) unless you have a specific reason to change it.</TextBlock>
@@ -809,11 +1109,12 @@
                                     <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">How to set up a Block Preset:</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">1. Click "+ Add" to create a new preset and give it a name.</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">2. Choose an Action: TurnOn, TurnOff, or Remove.</TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">3. Add Items - each item targets a specific block by Type or Subtype name.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">3. Add Items - each item targets a specific block by Type or Subtype name. Types can be written with or without the MyObjectBuilder_ prefix (Reactor and MyObjectBuilder_Reactor both work). Values with spaces are quoted for you.</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">4. Add Conditions (optional) - narrow down which grids are affected (e.g., only grids with no power, only grids owned by nobody).</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">5. Set a Delay on each item if you want a pause between processing each block type.</TextBlock>
                                     <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Running a preset:</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Type !admin runpreset followed by the preset name. Example: !admin runpreset "Disable Drills"</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">A preset marked ⚠ (for example an item without a Value, or a condition missing its Parameter) is refused when run, and the reason is shown.</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">You can also add this command as a step inside an Auto Command to run it on a schedule.</TextBlock>
                                 </StackPanel>
                             </TabItem>
@@ -828,6 +1129,14 @@
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Each preset has two sections: Targets and Conditions.</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,8">Targets define what you are looking for (e.g., grids named "Container MK" or grids owned by nobody). Each target generates a separate cleanup command.</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,8">Conditions are shared filters that apply to every target (e.g., only grids with no power, only grids far from players).</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Ships with rotors, hinges and pistons:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">A ship and everything attached to it by rotors, hinges and pistons is checked and deleted together:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="20,0,0,3">Name and grid type are checked on the main (largest) grid.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="20,0,0,3">Block and PCU counts are totals for the whole ship.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="20,0,0,3">Owner type uses whoever owns the most blocks on the whole ship; owned by nobody means no block on the whole ship is owned.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="20,0,0,3">"Has" conditions (has type, has power, ...) match when any part of the ship has it; "no" conditions (no type, no power, ...) match only when no part has it.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Safety:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="10,0,0,8">If any condition is unknown, is missing its parameter, or has a parameter that cannot be read, nothing is deleted and the reason is shown. A preset marked ⚠ is refused when run. Player distance only counts players who are alive in the world.</TextBlock>
                                     <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Apply To All:</TextBlock>
                                     <TextBlock TextWrapping="Wrap" Margin="10,0,0,8">Check this box if you do not need specific targets. When checked, the cleanup runs a single command using only the conditions. This is useful for broad cleanup rules like "delete all grids owned by nobody that are far from players".</TextBlock>
                                     <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,10,0,4">Name patterns (Regex):</TextBlock>
@@ -844,6 +1153,76 @@
                                 </StackPanel>
                             </TabItem>
 
+                            <TabItem Header="Command Permissions">
+                                <StackPanel Margin="15">
+                                    <TextBlock FontSize="16" FontWeight="Bold" Text="Command Permissions" Margin="0,0,0,10"/>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                                        Command Permissions let you give individual players access to specific commands without promoting them in-game. For example, you can let a trusted builder use !grids commands without making them an Admin. You can also block a command for a player who would normally be allowed to use it.
+                                    </TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+                                        Players who are not listed use normal in-game permissions. Commands typed in the server console are never affected.
+                                    </TextBlock>
+
+                                    <GroupBox Header="How to give a player a command" Margin="0,10,0,0" Padding="10">
+                                        <StackPanel>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">1. Tick "Enable Command Permissions" at the top of the tab. Nothing takes effect until this is ticked.</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">2. Click "+ Add Player".</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">3. If the player is online, choose them from "Pick online player". Otherwise type their name and 17-digit Steam ID. Only the Steam ID is used for matching; the name is just a label.</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">4. Click "+ Add Rule", then type or pick a command and set Access to Allow or Deny.</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">Changes take effect immediately; the player does not need to reconnect.</TextBlock>
+                                        </StackPanel>
+                                    </GroupBox>
+
+                                    <GroupBox Header="Writing rules" Margin="0,10,0,0" Padding="10">
+                                        <StackPanel>
+                                            <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,4,0,2">Command</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">The command as typed in chat, without the "!" and without any arguments. Example: to cover "!grids list", write "grids list". Letter case does not matter. While the server is running, the dropdown lists every registered command; hover an entry to see what it does.</TextBlock>
+
+                                            <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,4,0,2">Groups</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">A rule covers the command and everything under it. "grids" covers "grids list", "grids ejectall", "grids setowner" and every other grids command.</TextBlock>
+
+                                            <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,4,0,2">Everything (*)</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">A rule of "*" covers every command on the server, including other plugins' commands.</TextBlock>
+
+                                            <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,4,0,2">Allow</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">The player can use the command even if their in-game rank is too low.</TextBlock>
+
+                                            <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,4,0,2">Deny</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">The player cannot use the command, even if their in-game rank would normally allow it. They are told they do not have permission.</TextBlock>
+
+                                            <TextBlock TextWrapping="Wrap" FontWeight="Bold" Margin="0,4,0,2">When rules overlap</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,6">The most specific rule wins. "grids setowner" is more specific than "grids", which is more specific than "*". If an Allow and a Deny rule are equally specific, Deny wins.</TextBlock>
+                                        </StackPanel>
+                                    </GroupBox>
+
+                                    <GroupBox Header="Warnings" Margin="0,10,0,0" Padding="10">
+                                        <StackPanel>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">A ⚠ next to a player means the entry needs attention. Select it to see why:</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">No Steam ID - the entry does nothing until one is entered.</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Duplicate Steam ID - two entries use the same Steam ID; only the first one in the list is used.</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Allow * - the player can use every command on the server, including Torch commands such as !stop and !restart.</TextBlock>
+                                        </StackPanel>
+                                    </GroupBox>
+
+                                    <GroupBox Header="Example: Trusted Builder" Margin="0,10,0,0" Padding="10">
+                                        <StackPanel>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,4">Goal: let a player manage grids, but not change grid ownership.</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Rule 1: grids — Allow</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Rule 2: grids setowner — Deny</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,10,0,4">The player can use every !grids command except !grids setowner, because "grids setowner" is more specific than "grids".</TextBlock>
+                                        </StackPanel>
+                                    </GroupBox>
+
+                                    <GroupBox Header="Example: Restricted Moderator" Margin="0,10,0,0" Padding="10">
+                                        <StackPanel>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,0,0,4">Goal: a player is a Moderator in-game, but should not use any cleanup commands.</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="10,0,0,3">Rule 1: cleanup — Deny</TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,10,0,4">Every other command keeps working as normal for their Moderator rank.</TextBlock>
+                                        </StackPanel>
+                                    </GroupBox>
+                                </StackPanel>
+                            </TabItem>
+
                         </TabControl>
                     </StackPanel>
                 </ScrollViewer>
@@ -851,6 +1230,11 @@
 
         </TabControl>
 
-        <Button Grid.Row="1" Content="Save Config" HorizontalAlignment="Right" Margin="10" Padding="20,5" Click="SaveButton_OnClick"/>
+        <!-- Status bar: confirms actions and offers Undo after a removal. -->
+        <DockPanel Grid.Row="1" Margin="10,5,10,10" LastChildFill="True">
+            <Button DockPanel.Dock="Right" Content="Save Config" Padding="20,5" Click="SaveButton_OnClick"/>
+            <Button x:Name="UndoButton" DockPanel.Dock="Right" Content="Undo" Padding="15,5" Margin="0,0,10,0" Visibility="Collapsed" Click="UndoButton_OnClick"/>
+            <TextBlock x:Name="StatusText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+        </DockPanel>
     </Grid>
 </UserControl>

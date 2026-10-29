@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Sandbox.Game.World;
 using Torch;
@@ -64,6 +66,41 @@ public class CleanupPreset : ViewModel
         }
     }
 
+    /// <summary>
+    /// Problems that would stop this preset from running safely, or null when it is ready.
+    /// </summary>
+    public string? Problem
+    {
+        get
+        {
+            if (Action == CleanupAction.DeleteFloatingObjects)
+                return null;
+            if (!ApplyToAll && Targets.Count == 0)
+                return "Add at least one target, or tick Apply To All.";
+            if (ApplyToAll && Conditions.Count == 0)
+                return "Apply To All needs at least one condition.";
+
+            var all = Conditions.Select(c => (c.Condition, c.Parameter, Kind: "Condition"));
+            if (!ApplyToAll)
+                all = Targets.Select(t => (t.Condition, t.Parameter, Kind: "Target")).Concat(all);
+            foreach (var (condition, parameter, kind) in all)
+            {
+                if (condition.RequiresParameter() && string.IsNullOrWhiteSpace(parameter))
+                    return $"{kind} '{condition}' needs a Parameter.";
+                if (!condition.RequiresParameter() && !string.IsNullOrWhiteSpace(parameter))
+                    return $"{kind} '{condition}' does not take a Parameter.";
+            }
+            return null;
+        }
+    }
+
+    protected override void OnPropertyChanged([CallerMemberName] string propName = "")
+    {
+        base.OnPropertyChanged(propName);
+        if (propName != nameof(Problem))
+            base.OnPropertyChanged(nameof(Problem));
+    }
+
     private void WatchSubCollection<T>(ObservableCollection<T> collection) where T : ViewModel
     {
         collection.CollectionChanged += (_, e) =>
@@ -95,7 +132,11 @@ public class CleanupTarget : ViewModel
     public string Delay
     {
         get => DelaySpan.ToString();
-        set => SetValue(ref DelaySpan, TimeSpan.Parse(value));
+        set
+        {
+            if (TimeSpan.TryParse(value, CultureInfo.InvariantCulture, out var span))
+                SetValue(ref DelaySpan, span);
+        }
     }
 
     public override string ToString() => string.IsNullOrWhiteSpace(Parameter) ? $"{Condition}" : $"{Condition}: {Parameter}";
@@ -156,6 +197,15 @@ public static class CleanupConditionTypeExtensions
             CleanupConditionType.HasSubtypeFast => "hassubtype-fast",
             CleanupConditionType.NoSubtypeFast => "nosubtype-fast",
             _ => condition.ToString().ToLower()
+        };
+    }
+
+    public static bool RequiresParameter(this CleanupConditionType condition)
+    {
+        return condition switch
+        {
+            CleanupConditionType.HasPower or CleanupConditionType.NoPower or CleanupConditionType.InsidePlanet or CleanupConditionType.HasPilot => false,
+            _ => true
         };
     }
 }

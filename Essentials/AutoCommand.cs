@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
@@ -27,7 +29,10 @@ namespace Essentials
         private string _name = null!;
         private float _triggerRatio;
         private double _triggerCount;
-        private bool _isRunning;
+
+        // Guards the schedule and run state, which is used by the timer tick, commands and background runs.
+        private readonly object _sync = new();
+        private readonly List<CancellationTokenSource> _runs = new();
 
         private TimeSpan _simSpeedDuration = TimeSpan.FromSeconds(5);
         private TimeSpan _simSpeedCooldown = TimeSpan.FromSeconds(30);
@@ -40,7 +45,11 @@ namespace Essentials
         public Trigger CommandTrigger
         {
             get => _trigger;
-            set => SetValue(ref _trigger, value);
+            set
+            {
+                SetValue(ref _trigger, value);
+                ResetSchedule();
+            }
         }
 
         public Gtl Compare
@@ -60,19 +69,37 @@ namespace Essentials
             get => _interval.ToString();
             set
             {
-                _interval = TimeSpan.Parse(value);
-                OnPropertyChanged();
-                if (CommandTrigger == Trigger.Timed)
-                {
-                    _nextRun = DateTime.Now + _interval;
-                }
+                if (!TimeSpan.TryParse(value, CultureInfo.InvariantCulture, out var interval))
+                    return;
 
-                if (CommandTrigger == Trigger.Scheduled)
-                {
-                    _nextRun = DateTime.Now.Date + _interval;
-                    if (_nextRun < DateTime.Now) _nextRun += TimeSpan.FromDays(1);
-                }
+                _interval = interval;
+                OnPropertyChanged();
+                ResetSchedule();
             }
+        }
+
+        /// <summary>
+        /// Restarts the schedule from now. Called whenever the trigger or interval changes, so a command switched
+        /// on in the UI never inherits a stale next-run time.
+        /// </summary>
+        private void ResetSchedule()
+        {
+            lock (_sync)
+            {
+                _currentStep = 0;
+                _nextRun = _trigger switch
+                {
+                    Trigger.Timed => DateTime.Now + _interval,
+                    Trigger.Scheduled => NextScheduledRun(),
+                    _ => DateTime.MinValue
+                };
+            }
+        }
+
+        private DateTime NextScheduledRun()
+        {
+            var next = DateTime.Now.Date + _interval;
+            return next <= DateTime.Now ? next + TimeSpan.FromDays(1) : next;
         }
 
         public float TriggerRatio
@@ -93,7 +120,11 @@ namespace Essentials
         public string SimSpeedDuration
         {
             get => _simSpeedDuration.ToString();
-            set => SetValue(ref _simSpeedDuration, TimeSpan.Parse(value));
+            set
+            {
+                if (TimeSpan.TryParse(value, CultureInfo.InvariantCulture, out var span))
+                    SetValue(ref _simSpeedDuration, span);
+            }
         }
 
         [XmlIgnore]
@@ -102,7 +133,11 @@ namespace Essentials
         public string SimSpeedCooldown
         {
             get => _simSpeedCooldown.ToString();
-            set => SetValue(ref _simSpeedCooldown, TimeSpan.Parse(value));
+            set
+            {
+                if (TimeSpan.TryParse(value, CultureInfo.InvariantCulture, out var span))
+                    SetValue(ref _simSpeedCooldown, span);
+            }
         }
 
         public bool HysteresisEnabled
@@ -146,36 +181,46 @@ namespace Essentials
 
         public void Update()
         {
-            if (DateTime.Now < _nextRun)
-                return;
-
-            switch (CommandTrigger)
+            lock (_sync)
             {
-                case Trigger.GridCount:
-                case Trigger.PlayerCount:
-                    RunNow();
-                    _nextRun = DateTime.Now + _interval;
+                if (DateTime.Now < _nextRun)
                     return;
-                case Trigger.Scheduled when  DayOfWeek != DayOfWeek.All && DateTime.Now.DayOfWeek != (System.DayOfWeek)(int)DayOfWeek:
-                    _nextRun += TimeSpan.FromDays(1);
+
+                switch (CommandTrigger)
+                {
+                    case Trigger.GridCount:
+                    case Trigger.PlayerCount:
+                        _nextRun = DateTime.Now + _interval;
+                        // Don't restart this command while its previous run is still going, otherwise a condition
+                        // that stays true starts a new copy every check.
+                        if (_runs.Count == 0)
+                            RunNow();
+                        return;
+                    case Trigger.Scheduled when  DayOfWeek != DayOfWeek.All && DateTime.Now.DayOfWeek != (System.DayOfWeek)(int)DayOfWeek:
+                        _nextRun += TimeSpan.FromDays(1);
+                        return;
+                }
+
+                var steps = Steps.ToList();
+                if (steps.Count <= 0)
                     return;
+
+                if (_currentStep >= steps.Count)
+                    _currentStep = 0;
+
+                var step = steps[_currentStep];
+
+                step.RunStep();
+                _currentStep++;
+                // Delays count from when the step actually ran.
+                _nextRun = DateTime.Now + step.DelaySpan;
+
+                if (_currentStep < steps.Count) return;
+                _currentStep = 0;
+                _nextRun = _trigger == Trigger.Scheduled
+                        ? NextScheduledRun()
+                        : DateTime.Now + _interval;
             }
-
-            if (Steps.Count <= 0)
-                return;
-
-            var step = Steps[_currentStep];
-
-            step.RunStep();
-            _currentStep++;
-            _nextRun += step.DelaySpan;
-
-            if (_currentStep < Steps.Count) return;
-            _currentStep = 0;
-            _cTokenSource?.Dispose();
-            _nextRun = _trigger == Trigger.Scheduled
-                    ? DateTime.Now.Date + _interval + TimeSpan.FromDays(1)
-                    : _nextRun = DateTime.Now + _interval;
         }
 
         public class CommandStep : ViewModel
@@ -186,7 +231,11 @@ namespace Essentials
             public string Delay
             {
                 get => DelaySpan.ToString();
-                set => SetValue(ref DelaySpan, TimeSpan.Parse(value));
+                set
+                {
+                    if (TimeSpan.TryParse(value, CultureInfo.InvariantCulture, out var span))
+                        SetValue(ref DelaySpan, span);
+                }
             }
 
             public string Command
@@ -216,39 +265,58 @@ namespace Essentials
             }
         }
 
-        private CancellationTokenSource? _cTokenSource;
-
+        /// <summary>
+        /// Runs all steps in the background. Each run has its own cancellation token, so several runs of the same
+        /// command can exist (for example a manual !admin runauto) without interfering with each other.
+        /// </summary>
         internal async void RunNow()
         {
-            _cTokenSource = new CancellationTokenSource();
-            var token = _cTokenSource.Token;
-            _isRunning = true;
-            var steps = new List<CommandStep>(Steps);
-            await Task.Run(() =>
+            var cts = new CancellationTokenSource();
+            lock (_sync)
+                _runs.Add(cts);
+
+            try
             {
-                foreach (var step in steps)
+                var steps = Steps.ToList();
+                await Task.Run(() =>
                 {
-                    if (token.IsCancellationRequested)
+                    foreach (var step in steps)
                     {
-                        break;
+                        if (cts.IsCancellationRequested)
+                            break;
+
+                        step.RunStep();
+
+                        // Wakes up early when cancelled.
+                        cts.Token.WaitHandle.WaitOne(step.DelaySpan);
                     }
-                    step.RunStep();
-                    Thread.Sleep(step.DelaySpan);
-                }
-            }, token);
-            
-            _cTokenSource!.Dispose();
-            _isRunning = false;
+                });
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, $"Auto command '{_name}' failed");
+            }
+            finally
+            {
+                lock (_sync)
+                    _runs.Remove(cts);
+                cts.Dispose();
+            }
         }
 
         internal void Cancel()
         {
             Log.Info($"Cancelling autocommand {_name}");
-            _cTokenSource?.Cancel();
-            _currentStep = 0;
-            _nextRun = _trigger == Trigger.Scheduled
-                ? DateTime.Now.Date + _interval + TimeSpan.FromDays(1)
-                : _nextRun = DateTime.Now + _interval;
+            lock (_sync)
+            {
+                foreach (var run in _runs)
+                    run.Cancel();
+
+                _currentStep = 0;
+                _nextRun = _trigger == Trigger.Scheduled
+                    ? NextScheduledRun()
+                    : DateTime.Now + _interval;
+            }
         }
 
         public override string ToString()
@@ -258,7 +326,8 @@ namespace Essentials
 
         internal bool IsRunning()
         {
-            return _currentStep > 0 || _isRunning;
+            lock (_sync)
+                return _currentStep > 0 || _runs.Count > 0;
         }
     }
     

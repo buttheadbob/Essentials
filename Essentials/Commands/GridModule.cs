@@ -136,41 +136,60 @@ public class GridModule : CommandModule
     [Permission(MyPromoteLevel.SpaceMaster)]
     public void StopAll()
     {
-        foreach (var grid in MyEntities.GetEntities().OfType<MyCubeGrid>().Where(x => x.Projector == null))
+        int count = 0;
+        foreach (var grid in MyEntities.GetEntities().OfType<MyCubeGrid>().Where(x => x.Projector == null).ToList())
         {
+            if (grid.Physics == null)
+                continue;
+
             grid.Physics.ClearSpeed();
+            count++;
         }
+
+        Context.Respond($"Stopped {count} grids.");
     }
 
-    [Command("list", "Lists all grids you own at least 50% of. Will give you positions if the server admin enables the option.")]
+    private const string GridListGpsTag = "[Grids List]";
+
+    [Command("list", "Lists all grids where you own the most blocks. Shows positions or GPS markers if the server admin enables the option.")]
     [Permission(MyPromoteLevel.None)]
     public void List()
     {
-        var id = Context.Player?.IdentityId ?? 0;
+        if (Context.Player == null)
+        {
+            Context.Respond("This command can only be used in-game.");
+            return;
+        }
+
+        var id = Context.Player.IdentityId;
+        var config = EssentialsPlugin.Instance.Config;
+        var gpsApi = MyAPIGateway.Session?.GPS;
         StringBuilder sb = new StringBuilder();
 
-        foreach (var entity in MyEntities.GetEntities())
+        // Replace markers from the previous run instead of adding duplicates.
+        if (config.MarkerShowPosition && gpsApi != null)
         {
-            var grid = entity as MyCubeGrid;
-            if (grid == null || grid.Projector != null)
+            foreach (var old in gpsApi.GetGpsList(id).Where(g => g.Description?.StartsWith(GridListGpsTag) == true).ToList())
+                gpsApi.RemoveGps(id, old);
+        }
+
+        foreach (var grid in MyEntities.GetEntities().OfType<MyCubeGrid>().ToList())
+        {
+            if (grid.Projector != null || !grid.BigOwners.Contains(id))
                 continue;
 
-            if (Utils.Ownership.GetAllOwnerIds(grid).Contains(id))
+            sb.AppendLine($"{grid.DisplayName} - {grid.GridSizeEnum} - {grid.BlocksCount} blocks - Position {(config.UtilityShowPosition ? grid.PositionComp.GetPosition().ToString() : "Unknown")}");
+            if (config.MarkerShowPosition && gpsApi != null)
             {
-
-                sb.AppendLine($"{grid.DisplayName} - {grid.GridSizeEnum} - {grid.BlocksCount} blocks - Position {(EssentialsPlugin.Instance.Config.UtilityShowPosition ? grid.PositionComp.GetPosition().ToString() : "Unknown")}");
-                if (EssentialsPlugin.Instance.Config.MarkerShowPosition)
-                {
-                    IMyGps? gridGPS = MyAPIGateway.Session?.GPS.Create(grid.DisplayName, $"{grid.DisplayName} - {grid.GridSizeEnum} - {grid.BlocksCount} blocks", grid.PositionComp.GetPosition(), true);
-
-                    if (Context.Player != null && gridGPS != null)
-                        MyAPIGateway.Session?.GPS.AddGps(Context.Player.IdentityId, gridGPS);
-                }
+                IMyGps gridGPS = gpsApi.Create(grid.DisplayName, $"{GridListGpsTag} {grid.DisplayName} - {grid.GridSizeEnum} - {grid.BlocksCount} blocks", grid.PositionComp.GetPosition(), true);
+                gpsApi.AddGps(id, gridGPS);
             }
         }
 
-        if (Context.Player is not null)
-            ModCommunication.SendMessageTo(new DialogMessage("Grids List", $"Ships/Stations owned by {Context.Player.DisplayName}", sb.ToString()), Context.Player.SteamUserId);
+        if (sb.Length == 0)
+            sb.AppendLine("You don't own any grids.");
+
+        ModCommunication.SendMessageTo(new DialogMessage("Grids List", $"Ships/Stations owned by {Context.Player.DisplayName}", sb.ToString()), Context.Player.SteamUserId);
     }
 
     private const string ExportPath = "ExportedGrids\\{0}.xml";
@@ -208,10 +227,19 @@ public class GridModule : CommandModule
                 return;   
             }
 
-            targetName = Context.Player.Controller.ControlledEntity.Entity.DisplayName;
         }
 
-        if (!Utilities.TryGetEntityByNameOrId(targetName, out IMyEntity? ent))
+        IMyEntity? ent;
+        if (targetName == null)
+        {
+            ent = Context.Player!.Controller?.ControlledEntity?.Entity;
+            if (ent == null || Context.Player.Character == null || Context.Player.Character.IsDead)
+            {
+                Context.Respond("You must be alive in the world to spawn a grid next to you.");
+                return;
+            }
+        }
+        else if (!Utilities.TryGetEntityByNameOrId(targetName, out ent))
         {
             Context.Respond("Target entity not found.");
             return;

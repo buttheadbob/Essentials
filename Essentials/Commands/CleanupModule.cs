@@ -44,7 +44,7 @@ public class CleanupModule : CommandModule
         foreach (var grid in ConditionsChecker.ScanConditions(Context, Context.Args))
         {
             Log.Info($"Deleting grid: {grid.EntityId}: {grid.DisplayName}");
-            EjectPilots(grid);
+            Utilities.EjectPilots(grid);
             grid.Close();
             count++;
         }
@@ -81,19 +81,5 @@ public class CleanupModule : CommandModule
             ModCommunication.SendMessageTo(new DialogMessage("Cleanup help", null, sb.ToString()), Context.Player.SteamUserId);
         else
             Context.Respond(sb.ToString());
-    }
-
-    /// <summary>
-    /// Removes pilots from grid before deleting,
-    /// so the character doesn't also get deleted and break everything
-    /// </summary>
-    /// <param name="grid"></param>
-    public void EjectPilots(MyCubeGrid grid)
-    {
-        var b = grid.GetFatBlocks<MyCockpit>();
-        foreach (var c in b)
-        {
-            c.RemovePilot();
-        }
     }
 }
